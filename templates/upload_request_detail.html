@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Secure Send</title>
+
+  <!-- Bootstrap -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Dropzone -->
+  <link
+    href="https://unpkg.com/dropzone@5/dist/min/dropzone.min.css"
+    rel="stylesheet">
+  <script src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js"></script>
+
+  <!-- Vue -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+  <style>
+    body {
+      background-color: #f5f6f8;
+    }
+
+/* Dropzone */
+.dz-wrapper {
+  position: relative;
+}
+#dz {
+  position: relative;
+  min-height: 120px;
+
+  border: 2px dashed #0d6efd;      /* 点線枠 */
+  border-radius: .75rem;
+
+  background-color: #f0f6ff;       /* うすい青 */
+
+  display: flex;
+  flex-wrap: wrap;      /* 折り返し */
+  align-items: flex-start;
+  gap: 12px;            /* ← ファイル同士の隙間 */
+  padding: 12px;  
+}
+#uploadBtn {  /* アップロードボタン：常に右上 */
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+}
+#dz-placeholder { /* プレースホルダー：中央寄せ */
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none; /* ドロップ操作を邪魔しない */
+}
+
+.nav-tabs {
+  border-bottom: 0;
+}
+
+.tab-content
+{
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+tr.fade-out {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+    .log-table {
+        font-size: 0.85rem;
+    }
+    .truncate {
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+  </style>
+</head>
+
+<body>
+  <div class="container py-2">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <div>
+        <img
+          src="{{ url_for('static', filename='img/app_logo.png') }}"
+          alt="Secure Send"
+          height="100">
+      </div>
+
+      <div class="d-flex gap-2">
+        
+        <!-- Back button -->
+        <a href="{{ url_for('upload_request_list') }}"
+          class="btn btn-outline-secondary d-flex align-items-center"
+          aria-label="一覧に戻る">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          <span class="ms-1">戻る</span>
+        </a>
+
+        <!-- Side Menu button -->
+        <button class="btn btn-outline-secondary" data-bs-toggle="offcanvas" data-bs-target="#sideMenu" aria-label="メニュー">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="7" x2="20" y2="7"/>
+            <line x1="4" y1="12" x2="20" y2="12"/>
+            <line x1="4" y1="17" x2="20" y2="17"/>
+          </svg>
+        </button>
+
+      </div>
+    </div><!-- Header -->
+
+    <!-- Side Menu -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="sideMenu">
+      <div class="offcanvas-header">
+        <h5 class="offcanvas-title">Secure Send</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+      </div>
+
+      <div class="offcanvas-body">
+        <div class="d-flex flex-column gap-2">
+
+          <!-- ログアウトボタン -->
+          <form method="get" action="{{ url_for('logout') }}">
+            <button type="submit" class="btn btn-outline-danger w-100 text-start">
+              ログアウト
+            </button>
+          </form>
+
+        </div>
+      </div>
+    </div><!-- Side Menu -->
+
+    <!-- Upload URL 情報 -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+
+        <div class="mb-3">
+          <h1 class="h5 mb-1 fw-semibold">
+            BOX名：{{ upload_request.title }}
+          </h1>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">
+            アップロードURL
+          </label>
+          <div class="input-group">
+            <input
+              type="text"
+              class="form-control"
+              id="uploadUrl"
+              value="{{ request.url_root }}upload/{{ upload_request.upload_token }}"
+              readonly>
+            <button class="btn btn-outline-secondary" id="copyBtn">
+              コピー
+            </button>
+          </div>
+        </div>
+
+        <div class="row ">
+          <div class="col">
+            有効期限：{{ upload_request.expires_at }}
+            {% if upload_request.is_expired == 1 %}
+              <span class="badge bg-danger mx-3">期限切れ</span>
+            {% else %}
+              <span class="badge bg-success mx-3">有効</span>
+            {% endif %}
+          </div>
+
+          <div class="col">
+            最大ファイル数：{{ upload_request.max_files }} 件
+          </div>
+          <div class="col">
+            合計サイズ上限：{{ upload_request.max_total_size }} MB
+          </div>
+        </div>
+      </div>
+    </div><!-- Upload URL 情報 -->
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs" role="tablist">
+      <li class="nav-item">
+        <button
+          class="nav-link active"
+          data-bs-toggle="tab"
+          data-bs-target="#files">
+          ファイル
+        </button>
+      </li>
+      <li class="nav-item">
+        <button
+          class="nav-link"
+          data-bs-toggle="tab"
+          data-bs-target="#urls">
+          ダウンロードURL
+        </button>
+      </li>
+      <li class="nav-item">
+        <button
+          class="nav-link"
+          data-bs-toggle="tab"
+          data-bs-target="#logs">
+          アクセスログ
+        </button>
+      </li>
+    </ul><!-- Tabs -->
+
+    <div class="tab-content border rounded-bottom shadow-sm">
+
+      <!-- ファイルタブ -->
+      <div class="tab-pane rounded-bottom fade show active" id="files">
+
+        <!-- File list -->
+        {% raw %}
+        <div id="filesApp">
+          <table v-if="files.length" class="table table-striped align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>ファイル名</th>
+                <th style="width: 100px">サイズ</th>
+                <th style="width: 160px">アップロード日時</th>
+                <th style="width: 80px"></th>
+              </tr>
+            </thead>
+            <tbody>
+                <tr v-for="file in files" :key="file.file_id">
+                  <td class="text-truncate">
+                    {{ file.original_name }}
+                  </td>
+                  <td>{{ file.file_size }}</td>
+                  <td>{{ file.uploaded_at }}</td>
+                  <td>
+                    <div class="d-inline-flex align-items-center gap-2">
+                      <a :href="file.download_url">
+                        <svg
+                          width="24"
+                          height="24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                          <polyline points="7 10 12 15 17 10"></polyline>
+                          <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                      </a>
+                      <button class="btn p-0 text-danger"
+                              @click="openDeleteModal(file)">
+                        <svg
+                          width="24"
+                          height="24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          viewBox="0 0 24 24">
+                          <polyline points="3 6 5 6 21 6"></polyline>
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                          <path d="M10 11v6"></path>
+                          <path d="M14 11v6"></path>
+                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+            </tbody>
+          </table>
+
+          <!-- 削除確認ダイアログ -->
+          <div class="modal fade" id="confirmFileDeleteModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">削除確認</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                  {{ targetFile?.original_name }} を削除しますか？
+                </div>
+                <div class="modal-footer">
+                  <button class="btn btn-secondary" data-bs-dismiss="modal">
+                    キャンセル
+                  </button>
+                  <button class="btn btn-danger" @click="confirmDelete">
+                    削除
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endraw %}<!-- File list -->
+
+        <!-- Dropzone -->
+        <div class="dz-wrapper">
+        <form
+          action="{{ url_for('upload_file', upload_id=upload_request.id) }}"
+          method="post"
+          class="dropzone rounded-4 text-center"
+          id="dz">
+
+          <div id="dz-placeholder">
+            <div class="mb-2">
+              <svg
+                width="40"
+                height="40"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                class="text-primary"
+                viewBox="0 0 24 24">
+                <path d="M12 16V4"></path>
+                <path d="M8 8l4-4 4 4"></path>
+                <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
+              </svg>
+            </div>
+
+            <p class="fw-semibold text-primary mb-1">
+              ファイルをここにドラッグ＆ドロップ
+            </p>
+
+            <p class="small text-muted mb-0">
+              またはクリックしてファイルを選択
+            </p>
+          </div>
+        </form>
+        <button
+          id="uploadBtn"
+          class="btn btn-outline-primary float-end">
+          アップロード
+        </button>
+        </div><!-- Dropzone -->
+      </div><!-- ファイルタブ -->
+
+      <!-- ダウンロードURLタブ -->
+      <div class="tab-pane fade rounded-bottom" id="urls">
+
+        {% raw %}
+        <div id="downloadUrlsApp">
+          <!-- Download Url list -->
+          <table v-if="downloadUrls.length" class="table table-striped align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>ダウンロードURL</th>
+                    <th style="width: 80px">有効日数</th>
+                    <th style="width: 80px">DL回数</th>
+                    <th style="width: 100px">認証方式</th>
+                    <th style="width: 180px">認証情報</th>
+                    <th style="width: 80px"></th>
+                </tr>
+            </thead>
+            <tbody>
+              <tr v-for="downloadUrl in downloadUrls" :key="downloadUrl.id">
+                <td class="text-truncate">{{ urlRoot + 'download/' + downloadUrl.download_token }}</td>
+                <td>{{ downloadUrl.expire_days }}</td>
+                <td>{{ downloadUrl.max_downloads }}</td>
+                <td>{{ downloadUrl.auth_type }}</td>
+                <td>
+                  <div>{{ downloadUrl.auth_password + downloadUrl.auth_email }}</div>
+                </td>
+                <td>
+                  <div class="d-inline-flex align-items-center gap-2">
+                    <!-- コピーアイコン -->
+                    <button
+                      class="btn p-0 text-secondary"
+                      @click="copyUrl(downloadUrl)"
+                      title="URLをコピー"
+                    >
+                      <svg
+                        width="20"
+                        height="20"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        viewBox="0 0 24 24">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                    </button>
+                    <!-- ゴミ箱アイコン -->
+                    <button class="btn p-0 text-danger"
+                            @click="openDeleteModal(downloadUrl)"
+                            title="URLを削除"
+                    >
+                      <svg
+                        width="24"
+                        height="24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        viewBox="0 0 24 24">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                        <path d="M10 11v6"></path>
+                        <path d="M14 11v6"></path>
+                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- 削除確認ダイアログ -->
+          <div class="modal fade" id="confirmDownloadUrlDeleteModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">削除確認</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                  ダウンロードURLを削除しますか？
+                </div>
+                <div class="modal-footer">
+                  <button class="btn btn-secondary" data-bs-dismiss="modal">
+                    キャンセル
+                  </button>
+                  <button class="btn btn-danger" @click="confirmDelete">
+                    削除
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div><!-- Download Url list -->
+
+          <!-- ダウンロードURL発行 -->
+          <div class="px-3 py-2 border rounded shadow-sm">
+        
+            <!-- URL発行ボタン -->
+            <div class="d-flex justify-content-end mb-2">
+              <button
+                class="btn btn-outline-primary"
+                @click.prevent="generateUrl"
+                style="position: absolute;">
+                URL発行
+              </button>
+            </div>
+
+            <!-- １行目 -->
+            <div class="row g-3 m-1">
+
+              <!-- 有効日数 -->
+              <div class="col-md-4">
+                <label class="form-label small">有効日数</label>
+                <select class="form-select" v-model="expire_days" required>
+                  <option disabled value="">--有効日数を選択してください--</option>
+                  <option value="7">7日</option>
+                  <option value="14">14日</option>
+                  <option value="30">30日</option>
+                </select>
+              </div>
+              
+              <!-- ダウンロード回数 -->
+              <div class="col-md-4">
+                <label class="form-label small">ダウンロード回数</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  min="1"
+                  v-model.number="max_downloads"
+                  required>
+              </div>
+
+              <!-- 認証方式 -->
+              <div class="col-md-4">
+                <label class="form-label small">認証方式</label>
+                <select class="form-select" v-model="auth_type" required>
+                  <option disabled value="">--認証方式を選択してください--</option>
+                  <option value="none">なし</option>
+                  <option value="pass">パスワード</option>
+                  <option value="mail">本人確認メール</option>
+                </select>
+              </div>
+              
+            </div><!-- １行目 -->
+
+            <!-- ２行目 -->
+            <div class="row g-3 m-1">
+
+              <!-- 認証説明 -->
+              <div class="col-md-6">
+                <label class="form-label">＜＜認証方式説明＞＞</label>
+                <br/>
+                <label v-if="auth_type=='none'" class="form-label">
+                  ダウンロードURLのみで認証なしにアクセスできます。
+                </label>
+                <label v-if="auth_type=='pass'" class="form-label">
+                  ダウンロードURLと右で設定したパスワードでアクセスできます。
+                </label>
+                <label v-if="auth_type=='mail'" class="form-label">
+                  ダウンロードURLと右で設定したメールアドレスに送付されるワンタイムパスワードでアクセスできます。
+                </label>
+              </div>
+
+              <!-- パスワード -->
+              <div v-if="auth_type=='pass'" class="col-md-6">
+                <label class="form-label small">パスワード</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  v-model="auth_password"
+                  placeholder="ダウンロード用パスワードを入力"
+                  required>
+              </div>
+
+              <!-- メール -->
+              <div v-if="auth_type=='mail'" class="col-md-6">
+                <label class="form-label small">メールアドレス</label>
+                <input
+                  type="email"
+                  class="form-control"
+                  v-model="auth_email"
+                  placeholder="本人確認用のメールアドレスを入力"
+                  required>
+              </div>
+
+            </div><!-- ２行目 -->
+          </div><!-- ダウンロードURL発行 -->
+        </div><!-- downloadUrlsApp -->
+        {% endraw %}
+      </div><!-- ダウンロードURL -->
+
+      <div class="tab-pane fade rounded-bottom" id="logs">
+        <table class="table table-bordered table-hover log-table align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 130px">日時</th>
+                    <th>ユーザー</th>
+                    <th>アクション</th>
+                    <th>ダウンロード</th>
+                    <th>ファイル</th>
+                    <th style="width: 40px">結果</th>
+                    <th style="width: 40px">HTTP</th>
+                    <th style="width: 100px">IP</th>
+                    <th style="width: 100px">User-Agent</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for log in logs %}
+                <tr>
+                    <td>{{ log.accessed_at | datetime }}</td>
+                    <td>{{ log.user_id or "-" }}</td>
+                    <td>{{ log.action or "-" }}</td>
+                    <td>{{ log.download_request or log.download_request_id or "-" }}</td>
+                    <td>{{ log.file or log.file_id or "-" }}</td>
+                    <td>
+                        {% if log.result == "success" %}
+                            <span class="badge bg-success">success</span>
+                        {% else %}
+                            <span class="badge bg-danger">{{ log.result }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ log.http_status }}</td>
+                    <td>{{ log.ip_address }}</td>
+                    <td class="truncate" title="{{ log.user_agent }}">{{ log.user_agent }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>        
+      </div>
+  
+    </div>
+
+  </div>
+
+  <script src="{{ url_for('static', filename='js/init_dropzone.js') }}"></script>
+    
+  <!-- Toast コンテナ（画面上中央） -->
+  <div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3">
+
+    <div id="copyToast"
+        class="toast align-items-center text-bg-success border-0"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true">
+
+      <div class="d-flex">
+        <div class="toast-body" id="copyToastBody">
+          URLをコピーしました
+        </div>
+        <button type="button"
+                class="btn-close btn-close-white me-2 m-auto"
+                data-bs-dismiss="toast"
+                aria-label="Close">
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- クリップボードにコピー -->
+  <script>
+    let copyToast;
+    document.addEventListener("DOMContentLoaded", function () {
+      const toastEl = document.getElementById("copyToast");
+      copyToast = new bootstrap.Toast(toastEl, {
+        delay: 2000  // 表示時間（ms）
+      });
+    
+      document.getElementById("copyBtn").addEventListener("click", async function () {
+        try {
+          const url = document.getElementById("uploadUrl").value;
+          await navigator.clipboard.writeText(url);
+          showCopyToast("アップロードURLをコピーしました");
+        } catch (e) {
+          alert("コピーに失敗しました");
+        }
+      });
+    });
+
+    function showCopyToast(message) {
+      const body = document.getElementById("copyToastBody");
+      if (body) {
+        body.textContent = message;
+      }
+      if (copyToast) {
+        copyToast.show();
+      }
+    }
+  </script>
+    
+  <!-- アップロードファイルリスト Vue化 -->
+  <script>
+    const filesData = {{ files_json | safe }};
+    
+    window.filesApp = Vue.createApp({
+      data() {
+        return {
+          files: filesData,
+          targetFile: null,
+          deleteModal: null
+        };
+      },
+      mounted() {
+        this.deleteModal = new bootstrap.Modal(
+          document.getElementById("confirmFileDeleteModal")
+        );
+      },
+      methods: {
+        addFile(file) {
+          this.files.push(file);
+        },
+
+        openDeleteModal(file) {
+          this.targetFile = file;
+          this.deleteModal.show();
+        },
+
+        async confirmDelete() {
+          if (!this.targetFile) return;
+    
+          const file = this.targetFile;
+          const res = await fetch(file.delete_url, { method: "DELETE" });
+    
+          if (!res.ok) {
+            alert("削除に失敗しました");
+            return;
+          }
+    
+          this.files = this.files.filter(f => f.file_id !== file.file_id);
+          this.targetFile = null;
+          this.deleteModal.hide();
+        },
+      }
+    }).mount("#filesApp");
+  </script>
+
+  <!-- ダウンロードURLリスト Vue化 -->
+  <script>
+    const downloadUrlsData = {{ download_urls_json | safe }};
+    const CREATE_DWONLOAD_URL = "{{ url_for('download_request_generate') }}";
+    const URL_ROOT = "{{ request.url_root }}";
+
+    window.downloadUrlsApp = Vue.createApp({
+      data() {
+        return {
+          urlRoot: URL_ROOT,
+          downloadUrls: downloadUrlsData,
+          target: null,
+          deleteModal: null,
+
+          upload_request_id: "{{ upload_request.id }}",
+          expire_days: "",
+          max_downloads: 2,
+          auth_type: "",
+          auth_password: "",
+          auth_email: "",
+        };
+      },
+      mounted() {
+        this.deleteModal = new bootstrap.Modal(
+          document.getElementById("confirmDownloadUrlDeleteModal")
+        );
+      },
+      methods: {
+        addDownloadUrl(downloadUrl) {
+          this.downloadUrls.push(downloadUrl);
+        },
+
+        copyUrl(downloadUrl) {
+          const url = this.urlRoot + 'download/' + downloadUrl.download_token;
+
+          navigator.clipboard.writeText(url)
+            .then(() => {
+              showCopyToast("ダウンロードURLをコピーしました");
+            })
+            .catch(() => {
+              alert("コピーに失敗しました");
+            });
+        },
+
+        openDeleteModal(downloadUrls) {
+          this.target = downloadUrls;
+          this.deleteModal.show();
+        },
+
+        async confirmDelete() {
+          if (!this.target) return;
+    
+          const target = this.target;
+          const res = await fetch(target.delete_url, { method: "DELETE" });
+    
+          if (!res.ok) {
+            alert("削除に失敗しました");
+            return;
+          }
+    
+          this.downloadUrls = this.downloadUrls.filter(d => d.id !== target.id);
+          this.target = null;
+          this.deleteModal.hide();
+        },
+
+        async generateUrl() {
+          if (!this.expire_days || !this.max_downloads || !this.auth_type) {
+            alert("必須項目を入力してください");
+            return;
+          }
+    
+          const payload = {
+            upload_request_id: this.upload_request_id,
+            expire_days: this.expire_days,
+            max_downloads: this.max_downloads,
+            auth_type: this.auth_type,
+            auth_password: this.auth_password,
+            auth_email: this.auth_email
+          };
+    
+          try {
+            const res = await fetch(CREATE_DWONLOAD_URL, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(payload)
+            });
+    
+            if (!res.ok) throw new Error();
+    
+            const data = await res.json();
+    
+            // 成功後の処理（例：テーブルに追加）
+            this.downloadUrls.unshift(data);
+
+            // 初期化
+            this.expire_days = "";
+            this.max_downloads = 2;
+            this.auth_type = "";
+            this.auth_password = "";
+            this.auth_email = "";
+    
+          } catch (e) {
+            alert("URL発行に失敗しました");
+          }
+        },
+
+      }
+    }).mount("#downloadUrlsApp");
+  </script>
+
+</body>
+</html>
