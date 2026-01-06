@@ -38,6 +38,9 @@
           </div>
         {% endif %}
 
+        <!-- CSRFトークン -->
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
         {% if auth_type == 'pass' %}
           <div class="mb-3">
             <label class="form-label small">パスワード</label>

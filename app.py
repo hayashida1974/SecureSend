@@ -29,6 +29,7 @@ from flask import (
 )
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_session import Session
+from flask_seasurf import SeaSurf
 
 from paths import CONFIG_PATH, UPLOAD_DIR, DB_PATH
 from filters import (
@@ -37,31 +38,7 @@ from filters import (
     format_mask_email
 )
 from views.guest import guest_bp
-from db import (
-    close_db,
-    init_db,
-    save_login_user,
-    create_upload_request,
-    get_upload_request,
-    get_upload_request_by_token,
-    list_upload_requests,
-    create_file,
-    get_file,
-    list_files,
-    delete_file,
-    create_download_request,
-    update_download_expires,
-    get_download_request,
-    get_download_request_by_token,
-    list_download_requests,
-    get_guest_auth,
-    create_otp,
-    confirm_otp,
-    get_download_count,
-    increment_download_count,
-    save_access_log,
-    get_access_logs,
-)
+import db
 
 # ------------------------
 # Flaskアプリ作成
@@ -94,7 +71,7 @@ app.secret_key = os.environ.get("SECRET_KEY") or "dev-secret-key"
 # 起動時処理
 # ------------------------
 # DB初期化
-init_db(DB_PATH)
+db.init_db()
 # ディレクトリ作成
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -112,12 +89,17 @@ app.config.update(
 )
 Session(app)
 
-app.teardown_appcontext(close_db)
+app.teardown_appcontext(db.close_db)
 app.register_blueprint(guest_bp)
 
 app.template_filter("datetime")(format_datetime)
 app.template_filter("filesize")(format_filesize)
 app.template_filter("mask_email")(format_mask_email)
+
+# ----------------------------
+# CSRF対策
+# ----------------------------
+csrf = SeaSurf(app)
 
 # ------------------------
 # アクセスログ取得用
@@ -145,7 +127,7 @@ def after_request_logging(response):
     log["result"] = "success" if response.status_code < 400 else "error"
 
     if log["action"] or log["result"] == "error":
-        save_access_log(log)
+        db.crud.save_access_log(log)
         del g.access_log
 
     return response
@@ -157,7 +139,7 @@ def teardown_request_logging(exc):
         if log:
             log["http_status"] = 500
             log["result"] = "error"
-            save_access_log(log)
+            db.crud.save_access_log(log)
             del g.access_log
 
 # ------------------------
@@ -230,7 +212,7 @@ def authenticate_with_gs(username, password):
         mail = result.findtext("Mail1") or ""
 
         # ユーザー情報をテーブルに保存
-        save_login_user(login_id, name, mail)
+        db.crud.save_login_user(login_id, name, mail)
         return True
     except Exception:
         return False
@@ -263,9 +245,9 @@ def menu():
 # ------------------------
 # アップロード依頼発行画面
 # ------------------------
-@app.route("/upload_request_generate", methods=["GET", "POST"])
+@app.route("/generate_upload_request", methods=["GET", "POST"])
 @login_required
-def upload_request_generate():
+def generate_upload_request():
     error = None
 
     if request.method == "POST":
@@ -278,7 +260,7 @@ def upload_request_generate():
         user_id = session["user_id"]
 
         # アップロード依頼テーブル挿入
-        upload_request_id = create_upload_request(
+        upload_request_id = db.crud.create_upload_request(
             title,
             expires_at,
             max_files,
@@ -295,7 +277,7 @@ def upload_request_generate():
 
         # アップロード依頼詳細画面に遷移
         return redirect(
-            url_for("upload_request_detail",upload_id=upload_request_id)
+            url_for("detail_upload_request",upload_id=upload_request_id)
         )
 
     default_expires_at = (date.today() + timedelta(days=7)).isoformat()
@@ -309,13 +291,13 @@ def upload_request_generate():
 # ------------------------
 # アップロード依頼一覧画面
 # ------------------------
-@app.route("/upload_requests", methods=["GET"])
+@app.route("/list_upload_requests", methods=["GET"])
 @login_required
-def upload_request_list():
+def list_upload_requests():
 
     # アップロード依頼リスト取得
     user_id = session["user_id"]
-    upload_requests = list_upload_requests(user_id)
+    upload_requests = db.crud.list_upload_requests(user_id)
 
     return render_template(
         "upload_request_list.html",
@@ -325,23 +307,23 @@ def upload_request_list():
 # ------------------------
 # アップロード依頼詳細画面
 # ------------------------
-@app.route("/upload_requests/<upload_id>", methods=["GET"])
+@app.route("/upload_request/<upload_id>", methods=["GET"])
 @login_required
-def upload_request_detail(upload_id):
+def detail_upload_request(upload_id):
 
     # アップロード依頼取得
-    upload_request = get_upload_request(upload_id)
+    upload_request = db.crud.get_upload_request(upload_id)
     if upload_request is None:
         abort(404)
 
     # アップロード済ファイルリスト取得
-    files = list_files(upload_id)
+    files = db.crud.list_files(upload_id)
 
     # ダウンロード依頼リスト取得
-    download_requests = list_download_requests(upload_id)
+    download_requests = db.crud.list_download_requests(upload_id)
 
     # ログ取得
-    logs = get_access_logs(upload_request_id=upload_id)
+    logs = db.crud.list_access_logs(upload_request_id=upload_id)
 
     # テーブルがVueなのでJSONに変換
     upload_files_json = [{
@@ -351,10 +333,10 @@ def upload_request_detail(upload_id):
         "uploaded_at": format_datetime(f["uploaded_at"]),
         "download_url": url_for(
             "download_file",
-            upload_request_id=upload_id,
+            upload_id=upload_id,
             file_id=f["file_id"]
         ),
-        "delete_url": url_for("remove_file", file_id=f["file_id"]),
+        "delete_url": url_for("delete_file", file_id=f["file_id"]),
     } for f in files]
 
     # テーブルがVueなのでJSONに変換
@@ -368,15 +350,31 @@ def upload_request_detail(upload_id):
         "auth_password" : d["auth_password"],
         "auth_email" : d["auth_email"],
         "created_at" : format_datetime(d["created_at"]),
-        "delete_url": url_for("remove_download_request", download_id=d["id"]),
+        "delete_url": url_for("delete_download_request", download_id=d["id"]),
     } for d in download_requests]
+
+    # テーブルがVueなのでJSONに変換
+    logs_json = [{
+        "id": l["id"],
+        "accessed_at": format_datetime(l["accessed_at"]),
+        "user_id": l["user_id"],
+        "action": l["action"],
+        "download_request": l["download_request"],
+        "download_request_id": l["download_request_id"],
+        "file": l["file"],
+        "file_id": l["file_id"],
+        "result": l["result"],
+        "http_status": l["http_status"],
+        "ip_address": l["ip_address"],
+        "user_agent": l["user_agent"],
+    } for l in logs]
 
     return render_template(
         "upload_request_detail.html",
         upload_request=upload_request,
         files_json=json.dumps(upload_files_json),
         download_urls_json=json.dumps(download_urls_json),
-        logs=logs,
+        logs_json=json.dumps(logs_json),
     )
 
 # ------------------------
@@ -394,7 +392,7 @@ def upload_file(upload_id):
         return "ファイルが選択されていません", 400
 
     # アップロード依頼情報取得
-    upload_request = get_upload_request(upload_id)
+    upload_request = db.crud.get_upload_request(upload_id)
     if upload_request is None:
         abort(404)
 
@@ -408,7 +406,7 @@ def upload_file(upload_id):
     with sigleSemaphore:
 
         # アップロード済みファイル情報取得
-        uploaded_files = list_files(upload_id)
+        uploaded_files = db.crud.list_files(upload_id)
 
         # 現在のファイルサイズ合計を取得
         total_size = sum(f["file_size"] for f in uploaded_files)
@@ -442,8 +440,8 @@ def upload_file(upload_id):
                 return "合計ファイルサイズの上限に達しています", 403
 
             # ファイルテーブル挿入
-            create_file(upload_request["id"], file_id, f.filename, file_size)
-            file = get_file(file_id)
+            db.crud.create_file(upload_request["id"], file_id, f.filename, file_size)
+            file = db.crud.get_file(file_id)
 
             # アクセスログ
             if hasattr(g, "access_log"):
@@ -460,21 +458,21 @@ def upload_file(upload_id):
         "uploaded_at": format_datetime(file["uploaded_at"]),
         "download_url": url_for(
             "download_file",
-            upload_request_id=upload_request["id"],
+            upload_id=upload_request["id"],
             file_id=file_id
         ),
-        "delete_url": url_for("remove_file", file_id=file_id)
+        "delete_url": url_for("delete_file", file_id=file_id)
     })
 
 # ------------------------
 # アップロードURL詳細画面－ファイルダウンロード
 # ------------------------
-@app.route("/download/<upload_request_id>/<file_id>", methods=["GET"])
+@app.route("/download/<upload_id>/<file_id>", methods=["GET"])
 @login_required
-def download_file(upload_request_id, file_id):
+def download_file(upload_id, file_id):
 
     # ファイル情報取得
-    file_row = get_file(file_id)
+    file_row = db.crud.get_file(file_id)
 
     # ファイル情報存在チェック
     if file_row is None:
@@ -483,7 +481,7 @@ def download_file(upload_request_id, file_id):
     # 実ファイルパス作成
     file_path = os.path.join(
         UPLOAD_DIR,
-        upload_request_id,
+        upload_id,
         file_id
     )
 
@@ -495,7 +493,7 @@ def download_file(upload_request_id, file_id):
     if hasattr(g, "access_log"):
         g.access_log.update({
             "action": "download file",
-            "upload_request_id": upload_request_id,
+            "upload_request_id": upload_id,
             "file_id": file_id,
         })
 
@@ -510,12 +508,10 @@ def download_file(upload_request_id, file_id):
 # ------------------------
 @app.route("/delete_file/<file_id>", methods=["DELETE"])
 @login_required
-def remove_file(file_id):
+def delete_file(file_id):
 
     # ファイル情報取得
-    file_row = get_file(file_id)
-
-    # ファイル情報存在チェック
+    file_row = db.crud.get_file(file_id)
     if file_row is None:
         abort(404)
 
@@ -525,7 +521,7 @@ def remove_file(file_id):
     os.remove(file_path)
 
     # ファイルテーブル削除
-    delete_file(file_id)
+    db.crud.delete_file(file_id)
 
     # アクセスログ
     if hasattr(g, "access_log"):
@@ -540,9 +536,9 @@ def remove_file(file_id):
 # ------------------------
 # アップロード依頼詳細画面－ダウンロードURL発行
 # ------------------------
-@app.route("/create_download_trequest", methods=["POST"])
+@app.route("/generate_download_request", methods=["POST"])
 @login_required
-def download_request_generate():
+def generate_download_request():
 
     # パラメータ取得
     payload = request.get_json()
@@ -556,7 +552,7 @@ def download_request_generate():
     app.logger.info("auth_password: %s", auth_password)
 
     # ダウンロードURL発行
-    download_id = create_download_request(
+    download_id = db.crud.create_download_request(
         upload_request_id,
         expire_days,
         max_downloads,
@@ -565,7 +561,7 @@ def download_request_generate():
         auth_email)
 
     # 発行データ取得
-    download_row = get_download_request(download_id)
+    download_row = db.crud.get_download_request(download_id)
 
     # アクセスログ
     if hasattr(g, "access_log"):
@@ -585,7 +581,7 @@ def download_request_generate():
         "auth_password" : download_row["auth_password"],
         "auth_email" : download_row["auth_email"],
         "created_at" : format_datetime(download_row["created_at"]),
-        "delete_url": url_for("remove_download_request", download_id=download_row["id"]),
+        "delete_url": url_for("delete_download_request", download_id=download_row["id"]),
     })
 
 # ------------------------
@@ -593,17 +589,15 @@ def download_request_generate():
 # ------------------------
 @app.route("/delete_download_request/<download_id>", methods=["DELETE"])
 @login_required
-def remove_download_request(download_id):
+def delete_download_request(download_id):
 
-    # 発行データ取得
-    download_row = get_download_request(download_id)
+    # ダウンロード依頼取得
+    download_row = db.crud.get_download_request(download_id)
+    if download_row is None:
+        abort(404)
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-
-        cur.execute("DELETE FROM download_requests WHERE id = ?", (download_id,))
-        conn.commit()
+    # ダウンロード依頼削除
+    db.crud.delete_download_request(download_id)
 
     # アクセスログ
     if hasattr(g, "access_log"):
@@ -612,6 +606,69 @@ def remove_download_request(download_id):
             "upload_request_id": download_row["upload_request_id"],
             "download_request_id": download_id,
         })
+
+    return "", 200
+
+# ------------------------
+# アップロード依頼詳細画面－操作ログ取得
+# ------------------------
+@app.route("/access_logs/<upload_id>", methods=["GET"])
+@login_required
+def get_access_logs(upload_id):
+
+    # ログ取得
+    logs = db.crud.list_access_logs(upload_request_id=upload_id)
+
+    # テーブルがVueなのでJSONに変換
+    logs_json = [{
+        "id": l["id"],
+        "accessed_at": format_datetime(l["accessed_at"]),
+        "user_id": l["user_id"],
+        "action": l["action"],
+        "download_request": l["download_request"],
+        "download_request_id": l["download_request_id"],
+        "file": l["file"],
+        "file_id": l["file_id"],
+        "result": l["result"],
+        "http_status": l["http_status"],
+        "ip_address": l["ip_address"],
+        "user_agent": l["user_agent"],
+    } for l in logs]
+
+    return json.dumps(logs_json)
+
+# ------------------------
+# アップロードURL詳細画面－アップロード依頼削除
+# ------------------------
+@app.route("/delete_upload_request/<upload_id>", methods=["DELETE"])
+@login_required
+def delete_upload_request(upload_id):
+
+    # アクセスログ
+    if hasattr(g, "access_log"):
+        g.access_log.update({
+            "action": "delete upload url",
+            "upload_request_id": upload_id,
+        })
+
+    # アップロード依頼情報取得
+    upload_request = db.crud.get_upload_request(upload_id)
+    if upload_request is None:
+        abort(404)
+
+    # アップロード済ファイルリスト取得
+    files = db.crud.list_files(upload_id)
+
+    # ファイル削除
+    for f in files:
+        upload_dir = os.path.join(UPLOAD_DIR, f["upload_request_id"])
+        file_path = os.path.join(upload_dir, f["file_id"])
+        os.remove(file_path)
+    # フォルダ削除
+    os.rmdir(upload_dir)
+
+    # アップロード依頼削除
+    files = db.crud.delete_upload_request(upload_id)
 
     return "", 200
 
@@ -637,7 +694,7 @@ def access_logs():
         total_pages = max(1, math.ceil(total / per_page))
 
     # ログ取得
-    logs = get_access_logs(per_page, offset)
+    logs = db.crud.list_access_logs(per_page, offset)
 
     return render_template(
         "access_logs.html",

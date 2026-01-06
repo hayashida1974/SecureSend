@@ -85,6 +85,9 @@
 
       <!-- Form -->
       <form method="post" id="issueForm">
+        
+        <!-- CSRFトークン -->
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
         <div class="mb-3">
           <label for="title" class="form-label small">

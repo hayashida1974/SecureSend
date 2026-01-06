@@ -97,7 +97,7 @@
           <tbody>
           {% for req in upload_requests %}
             <tr class="clickable-row"
-                data-href="{{ url_for('upload_request_detail', upload_id=req.id) }}">
+                data-href="{{ url_for('detail_upload_request', upload_id=req.id) }}">
               <td class="fw-medium">
                 {{ req.title or '（未設定）' }}
               </td>

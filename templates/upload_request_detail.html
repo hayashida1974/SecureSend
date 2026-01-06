@@ -15,6 +15,7 @@
     href="https://unpkg.com/dropzone@5/dist/min/dropzone.min.css"
     rel="stylesheet">
   <script src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js"></script>
+  <script src="{{ url_for('static', filename='js/dropzone.js') }}"></script>
 
   <!-- Vue -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -24,66 +25,61 @@
       background-color: #f5f6f8;
     }
 
-/* Dropzone */
-.dz-wrapper {
-  position: relative;
-}
-#dz {
-  position: relative;
-  min-height: 120px;
+    /* Dropzone */
+    .dz-wrapper {
+      position: relative;
+    }
+    #dz {
+      position: relative;
+      min-height: 120px;
+      border: 2px dashed #0d6efd;
+      border-radius: .75rem;
+      background-color: #f0f6ff;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px;
+    }
+    #dz-upload {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 10;
+    }
+    #dz-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
 
-  border: 2px dashed #0d6efd;      /* 点線枠 */
-  border-radius: .75rem;
+    /* tabs */
+    .nav-tabs {
+      border-bottom: 0;
+    }
+    .tab-content {
+      background-color: #ffffff;
+      padding: 20px;
+    }
 
-  background-color: #f0f6ff;       /* うすい青 */
-
-  display: flex;
-  flex-wrap: wrap;      /* 折り返し */
-  align-items: flex-start;
-  gap: 12px;            /* ← ファイル同士の隙間 */
-  padding: 12px;  
-}
-#uploadBtn {  /* アップロードボタン：常に右上 */
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 10;
-}
-#dz-placeholder { /* プレースホルダー：中央寄せ */
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none; /* ドロップ操作を邪魔しない */
-}
-
-.nav-tabs {
-  border-bottom: 0;
-}
-
-.tab-content
-{
-  background-color: #ffffff;
-  padding: 20px;
-}
-
-tr.fade-out {
-  opacity: 0;
-  transition: opacity 0.5s ease;
-}
-
+    /* table */
+    tr.fade-out {
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
     .log-table {
-        font-size: 0.85rem;
+      font-size: 0.85rem;
     }
     .truncate {
-        max-width: 200px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+      max-width: 200px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-
   </style>
 </head>
 
@@ -102,7 +98,7 @@ tr.fade-out {
       <div class="d-flex gap-2">
         
         <!-- Back button -->
-        <a href="{{ url_for('upload_request_list') }}"
+        <a href="{{ url_for('list_upload_requests') }}"
           class="btn btn-outline-secondary d-flex align-items-center"
           aria-label="一覧に戻る">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -150,15 +146,15 @@ tr.fade-out {
 
         <div class="mb-3">
           <h1 class="h5 mb-1 fw-semibold">
-            BOX名：{{ upload_request.title }}
+            {{ upload_request.title }}
           </h1>
         </div>
 
         <div class="mb-3">
-          <label class="form-label">
-            アップロードURL
-          </label>
           <div class="input-group">
+            <span class="input-group-text">
+              アップロードURL：
+            </span>       
             <input
               type="text"
               class="form-control"
@@ -171,7 +167,7 @@ tr.fade-out {
           </div>
         </div>
 
-        <div class="row ">
+        <div class="row">
           <div class="col">
             有効期限：{{ upload_request.expires_at }}
             {% if upload_request.is_expired == 1 %}
@@ -207,6 +203,14 @@ tr.fade-out {
           data-bs-toggle="tab"
           data-bs-target="#urls">
           ダウンロードURL
+        </button>
+      </li>
+      <li class="nav-item">
+        <button
+          class="nav-link"
+          data-bs-toggle="tab"
+          data-bs-target="#etc">
+          その他の操作
         </button>
       </li>
       <li class="nav-item">
@@ -312,6 +316,9 @@ tr.fade-out {
           class="dropzone rounded-4 text-center"
           id="dz">
 
+          <!-- CSRFトークン -->
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
           <div id="dz-placeholder">
             <div class="mb-2">
               <svg
@@ -338,7 +345,7 @@ tr.fade-out {
           </div>
         </form>
         <button
-          id="uploadBtn"
+          id="dz-upload"
           class="btn btn-outline-primary float-end">
           アップロード
         </button>
@@ -354,23 +361,19 @@ tr.fade-out {
           <table v-if="downloadUrls.length" class="table table-striped align-middle">
             <thead class="table-light">
                 <tr>
-                    <th>ダウンロードURL</th>
+                    <th style="width: 540px">ダウンロードURL</th>
+                    <th style="width: 50px"></th>
                     <th style="width: 80px">有効日数</th>
+                    <th style="width: 160px">有効期限</th>
                     <th style="width: 80px">DL回数</th>
                     <th style="width: 100px">認証方式</th>
-                    <th style="width: 180px">認証情報</th>
-                    <th style="width: 80px"></th>
+                    <th>認証情報</th>
+                    <th style="width: 50px"></th>
                 </tr>
             </thead>
             <tbody>
               <tr v-for="downloadUrl in downloadUrls" :key="downloadUrl.id">
-                <td class="text-truncate">{{ urlRoot + 'download/' + downloadUrl.download_token }}</td>
-                <td>{{ downloadUrl.expire_days }}</td>
-                <td>{{ downloadUrl.max_downloads }}</td>
-                <td>{{ downloadUrl.auth_type }}</td>
-                <td>
-                  <div>{{ downloadUrl.auth_password + downloadUrl.auth_email }}</div>
-                </td>
+                <td class="truncate">{{ urlRoot + 'download/' + downloadUrl.download_token }}</td>
                 <td>
                   <div class="d-inline-flex align-items-center gap-2">
                     <!-- コピーアイコン -->
@@ -390,6 +393,17 @@ tr.fade-out {
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                       </svg>
                     </button>
+                  </div>
+                </td>
+                <td>{{ downloadUrl.expire_days }}</td>
+                <td class="truncate">{{ downloadUrl.expires_at || '-' }}</td>
+                <td>{{ downloadUrl.max_downloads }}</td>
+                <td>{{ downloadUrl.auth_type }}</td>
+                <td class="truncate">
+                  {{ downloadUrl.auth_password + downloadUrl.auth_email }}
+                </td>
+                <td>
+                  <div class="d-inline-flex align-items-center gap-2">
                     <!-- ゴミ箱アイコン -->
                     <button class="btn p-0 text-danger"
                             @click="openDeleteModal(downloadUrl)"
@@ -439,7 +453,7 @@ tr.fade-out {
           </div><!-- Download Url list -->
 
           <!-- ダウンロードURL発行 -->
-          <div class="px-3 py-2 border rounded shadow-sm">
+          <form class="px-3 py-2 border rounded shadow-sm" id="issueForm">
         
             <!-- URL発行ボタン -->
             <div class="d-flex justify-content-end mb-2">
@@ -530,13 +544,100 @@ tr.fade-out {
               </div>
 
             </div><!-- ２行目 -->
-          </div><!-- ダウンロードURL発行 -->
+          </form><!-- ダウンロードURL発行 -->
         </div><!-- downloadUrlsApp -->
         {% endraw %}
-      </div><!-- ダウンロードURL -->
+      </div><!-- ダウンロードURLタブ  -->
 
+      <!-- その他の操作タブ  -->
+      <div class="tab-pane fade rounded-bottom" id="etc">
+        <div class="my-2">
+          <button
+            type="button"
+            class="btn btn-danger w-25 text-start"
+            data-bs-toggle="modal"
+            data-bs-target="#confirmUploadUrlDeleteModal"
+            id="deleteBoxBtn">
+            BOX削除
+          </button>
+        </div>
+
+        <!-- 削除確認ダイアログ -->
+        <div class="modal fade" id="confirmUploadUrlDeleteModal" tabindex="-1">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+              
+              <div class="modal-header">
+                <h5 class="modal-title">削除確認</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+
+              <div class="modal-body delete-modal-body">
+                <div class="mb-2">
+                  この操作を行うと、メールBOX
+                  "<strong>{{ upload_request.title }}</strong>" が削除されます。
+                </div>
+                <div class="mb-2">
+                  アップロード済みのファイルもすべて削除されますのでご注意ください。
+                </div>
+                <div class="mb-3">
+                  確認のため、下の入力欄にBOX名を正確に入力してください。
+                </div>
+                <input type="text" class="form-control" id="confirmDeleteInput" placeholder="BOX名を入力">
+              </div>
+
+              <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                <button class="btn btn-danger" id="confirmDeleteBtn" disabled>削除</button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div><!-- その他の操作タブ  -->
+      
+      <!-- アクセスログタブ  -->
       <div class="tab-pane fade rounded-bottom" id="logs">
-        <table class="table table-bordered table-hover log-table align-middle">
+        {% raw %}
+        <div id="logsApp">
+
+          <!-- ページネーション + 更新 + 件数セレクト -->
+          <div class="d-flex align-items-center justify-content-between mb-3">
+
+            <!-- ページネーション（左寄せ） -->
+            <nav>
+              <ul class="pagination mb-0">
+                <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                  <a class="page-link" href="#" @click.prevent="goPage(currentPage - 1)">前へ</a>
+                </li>
+
+                <li class="page-item" 
+                    v-for="p in totalPages" 
+                    :key="p" 
+                    :class="{ active: p === currentPage }">
+                  <a class="page-link" href="#" @click.prevent="goPage(p)">{{ p }}</a>
+                </li>
+
+                <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                  <a class="page-link" href="#" @click.prevent="goPage(currentPage + 1)">次へ</a>
+                </li>
+              </ul>
+            </nav>
+
+            <!-- 件数セレクト + 更新ボタン（右寄せ） -->
+            <div class="d-flex align-items-center ms-3">
+              <select class="form-select me-2" style="width: auto;" v-model.number="perPage">
+                <option :value="10">10件</option>
+                <option :value="50">50件</option>
+                <option :value="100">100件</option>
+              </select>
+              <button class="btn btn-outline-primary" @click.prevent="refresh">更新</button>
+            </div>
+
+          </div><!-- ページネーション + 更新 + 件数セレクト -->
+
+          <table class="table table-bordered table-hover log-table align-middle">
             <thead class="table-light">
                 <tr>
                     <th style="width: 130px">日時</th>
@@ -544,42 +645,37 @@ tr.fade-out {
                     <th>アクション</th>
                     <th>ダウンロード</th>
                     <th>ファイル</th>
-                    <th style="width: 40px">結果</th>
+                    <th style="width: 60px">結果</th>
                     <th style="width: 40px">HTTP</th>
                     <th style="width: 100px">IP</th>
                     <th style="width: 100px">User-Agent</th>
                 </tr>
             </thead>
             <tbody>
-            {% for log in logs %}
-                <tr>
-                    <td>{{ log.accessed_at | datetime }}</td>
-                    <td>{{ log.user_id or "-" }}</td>
-                    <td>{{ log.action or "-" }}</td>
-                    <td>{{ log.download_request or log.download_request_id or "-" }}</td>
-                    <td>{{ log.file or log.file_id or "-" }}</td>
-                    <td>
-                        {% if log.result == "success" %}
-                            <span class="badge bg-success">success</span>
-                        {% else %}
-                            <span class="badge bg-danger">{{ log.result }}</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ log.http_status }}</td>
-                    <td>{{ log.ip_address }}</td>
-                    <td class="truncate" title="{{ log.user_agent }}">{{ log.user_agent }}</td>
-                </tr>
-            {% endfor %}
+              <tr v-for="log in paginatedLogs" :key="log.id">
+                <td>{{ log.accessed_at }}</td>
+                <td>{{ log.user_id || "-" }}</td>
+                <td>{{ log.action || "-" }}</td>
+                <td>{{ log.download_request || log.download_request_id || "-" }}</td>
+                <td class="truncate" :title="log.file || log.file_id || '-'">{{ log.file || log.file_id || "-" }}</td>
+                <td>
+                  <span v-if="log.result === 'success'" class="badge bg-success">success</span>
+                  <span v-else class="badge bg-danger">{{ log.result }}</span>
+                </td>
+                <td>{{ log.http_status }}</td>
+                <td>{{ log.ip_address }}</td>
+                <td class="truncate" :title="log.user_agent">{{ log.user_agent }}</td>
+              </tr>
             </tbody>
-        </table>        
-      </div>
-  
+          </table>        
+        </div>
+        {% endraw %}
+      </div><!-- アクセスログタブ  -->
+
     </div>
 
   </div>
 
-  <script src="{{ url_for('static', filename='js/init_dropzone.js') }}"></script>
-    
   <!-- Toast コンテナ（画面上中央） -->
   <div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3">
 
@@ -591,7 +687,7 @@ tr.fade-out {
 
       <div class="d-flex">
         <div class="toast-body" id="copyToastBody">
-          URLをコピーしました
+          メッセージ
         </div>
         <button type="button"
                 class="btn-close btn-close-white me-2 m-auto"
@@ -633,11 +729,11 @@ tr.fade-out {
       }
     }
   </script>
-    
+  
   <!-- アップロードファイルリスト Vue化 -->
   <script>
     const filesData = {{ files_json | safe }};
-    
+
     window.filesApp = Vue.createApp({
       data() {
         return {
@@ -665,8 +761,13 @@ tr.fade-out {
           if (!this.targetFile) return;
     
           const file = this.targetFile;
-          const res = await fetch(file.delete_url, { method: "DELETE" });
-    
+          const res = await fetch(file.delete_url, {
+            method: "DELETE",
+            headers: {
+              "X-CSRFToken": "{{ csrf_token() }}"
+            }
+          });
+
           if (!res.ok) {
             alert("削除に失敗しました");
             return;
@@ -683,7 +784,7 @@ tr.fade-out {
   <!-- ダウンロードURLリスト Vue化 -->
   <script>
     const downloadUrlsData = {{ download_urls_json | safe }};
-    const CREATE_DWONLOAD_URL = "{{ url_for('download_request_generate') }}";
+    const CREATE_DWONLOAD_URL = "{{ url_for('generate_download_request') }}";
     const URL_ROOT = "{{ request.url_root }}";
 
     window.downloadUrlsApp = Vue.createApp({
@@ -733,8 +834,13 @@ tr.fade-out {
           if (!this.target) return;
     
           const target = this.target;
-          const res = await fetch(target.delete_url, { method: "DELETE" });
-    
+          const res = await fetch(target.delete_url, {
+            method: "DELETE",
+            headers: {
+              "X-CSRFToken": "{{ csrf_token() }}"
+            }
+          });
+            
           if (!res.ok) {
             alert("削除に失敗しました");
             return;
@@ -746,11 +852,15 @@ tr.fade-out {
         },
 
         async generateUrl() {
-          if (!this.expire_days || !this.max_downloads || !this.auth_type) {
-            alert("必須項目を入力してください");
+
+          // バリデーションチェック
+          const form = document.getElementById('issueForm');
+          if (!form.checkValidity()) {
+            // NGならブラウザ標準のエラー表示
+            form.reportValidity();
             return;
           }
-    
+
           const payload = {
             upload_request_id: this.upload_request_id,
             expire_days: this.expire_days,
@@ -764,7 +874,8 @@ tr.fade-out {
             const res = await fetch(CREATE_DWONLOAD_URL, {
               method: "POST",
               headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token() }}",
               },
               body: JSON.stringify(payload)
             });
@@ -792,5 +903,73 @@ tr.fade-out {
     }).mount("#downloadUrlsApp");
   </script>
 
+  <!-- アクセスログリスト Vue化 -->
+  <script>
+    const logsData = {{ logs_json | safe }};
+    const GET_LOGS_URL = "{{ url_for('get_access_logs', upload_id=upload_request.id) }}";
+
+    window.logsApp = Vue.createApp({
+      data() {
+        return {
+          logs: logsData,
+          currentPage: 1,          // 現在のページ
+          perPage: 10,             // 1ページあたりの件数
+        };
+      },
+      computed: {
+        paginatedLogs() {
+          const start = (this.currentPage - 1) * this.perPage;
+          const end = start + this.perPage;
+          return this.logs.slice(start, end);
+        },
+        totalPages() {
+          return Math.ceil(this.logs.length / this.perPage);
+        }
+      },
+      methods: {
+        async refresh() {
+          const res = await fetch(GET_LOGS_URL, {
+            method: "GET",
+          });
+          if (!res.ok) throw new Error();
+          this.logs = await res.json();
+        },
+        goPage(page) {
+          if (page < 1 || page > this.totalPages) return;
+          this.currentPage = page;
+        },
+      }
+    }).mount("#logsApp");
+  </script>
+
+  <!-- アップロード依頼削除 -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const deleteInput = document.getElementById("confirmDeleteInput");
+      const confirmBtn = document.getElementById("confirmDeleteBtn");
+      const uploadTitle = "{{ upload_request.title }}";
+    
+      // 入力チェックして削除ボタンの有効化
+      deleteInput.addEventListener("input", () => {
+        confirmBtn.disabled = deleteInput.value !== uploadTitle;
+      });
+        
+      confirmBtn.addEventListener("click", async () => {
+
+        const res = await fetch("{{ url_for('delete_upload_request', upload_id=upload_request.id) }}", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": "{{ csrf_token() }}"
+          }
+        });
+        if (!res.ok) throw new Error();
+
+        alert("削除しました");
+
+        window.location.href = "{{ url_for('list_upload_requests') }}";
+      });
+    });
+  </script>
 </body>
 </html>

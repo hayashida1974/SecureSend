@@ -1,4 +1,12 @@
 
+const style = document.createElement('style');
+style.textContent = `
+  .dz-preview.border-danger {
+    border-width: 2px !important;
+  }
+`;
+document.head.appendChild(style);
+
 Dropzone.options.dz = {
   autoProcessQueue: false,   // 自動アップロードしない
   parallelUploads: 10,        // 同時アップロード数
@@ -41,7 +49,8 @@ Dropzone.options.dz = {
 
         <!-- エラー -->
         <div class="dz-error-message text-danger small mt-2"
-            data-dz-errormessage></div>
+            data-dz-errormessage>
+        </div>
 
       </div>
     </div>
@@ -52,7 +61,7 @@ Dropzone.options.dz = {
       const placeholder = document.getElementById("dz-placeholder");
 
       // アップロードボタン押下時処理
-      document.getElementById("uploadBtn").addEventListener("click", function () {
+      document.getElementById("dz-upload").addEventListener("click", function () {
           // キューに溜まっているファイルを一括アップロード
           dz.processQueue();
       });
@@ -71,7 +80,9 @@ Dropzone.options.dz = {
 
       // 失敗時
       this.on("error", function (file) {
-          file.previewElement.classList.add("border-red-400", "bg-red-50");
+        const el = file.previewElement;
+        // 赤いボーダー + 薄い赤背景
+        el.classList.add("border", "border-danger", "bg-danger", "bg-opacity-10");
       });
 
       // 成功時

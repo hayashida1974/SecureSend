@@ -46,6 +46,9 @@
 
   <form method="post">
     <div class="mb-3">
+      <!-- CSRFトークン -->
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
       <label class="form-label">送信元メールアドレス</label>
       <input
         type="email"

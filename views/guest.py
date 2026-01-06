@@ -35,31 +35,7 @@ from flask_session import Session
 
 from paths import CONFIG_PATH, UPLOAD_DIR, DB_PATH
 from filters import format_datetime, format_filesize, format_mask_email
-from db import (
-    close_db,
-    init_db,
-    save_login_user,
-    create_upload_request,
-    get_upload_request,
-    get_upload_request_by_token,
-    list_upload_requests,
-    create_file,
-    get_file,
-    list_files,
-    delete_file,
-    create_download_request,
-    update_download_expires,
-    get_download_request,
-    get_download_request_by_token,
-    list_download_requests,
-    get_guest_auth,
-    create_otp,
-    confirm_otp,
-    get_download_count,
-    increment_download_count,
-    save_access_log,
-    get_access_logs,
-)
+import db
 
 # ------------------------
 # 設定
@@ -74,7 +50,7 @@ def guest_auth(token):
     error = None
 
     # ゲスト認証情報取得
-    auth = get_guest_auth(token)
+    auth = db.crud.find_guest_auth(token)
     if not auth:
         abort(404)
 
@@ -101,7 +77,7 @@ def guest_auth(token):
                         "action": "auth OK",
                     })
 
-                return redirect(url_for("guest.guest_download_request", token=token))
+                return redirect(url_for("guest.guest_download", token=token))
             else:
                 # アクセスログ
                 if hasattr(g, "access_log"):
@@ -124,13 +100,13 @@ def guest_auth(token):
                 # ワンタイムパスワード生成
                 otp_code = generate_otp()
                 # テーブル登録
-                create_otp(token, auth["auth_email"], otp_code)
+                db.crud.create_otp(token, auth["auth_email"], otp_code)
                 # メール送信
                 send_otp_email(auth["auth_email"], otp_code)
                 auth_type = "otp_pass"
             else:
                 otpcode = request.form.get("otpcode", "")
-                otp = confirm_otp(token, otpcode)
+                otp = db.crud.confirm_otp(token, otpcode)
                 if otp:
                     if token not in authenticated_tokens:
                         authenticated_tokens.append(token)                
@@ -142,7 +118,7 @@ def guest_auth(token):
                             "action": "auth OK",
                         })
 
-                    return redirect(url_for("guest.guest_download_request", token=token))
+                    return redirect(url_for("guest.guest_download", token=token))
                 else:
                     # アクセスログ
                     if hasattr(g, "access_log"):
@@ -161,14 +137,13 @@ def guest_auth(token):
         error=error
     )
 
+import random
 def generate_otp(length=6):
     return f"{random.randint(0, 10**length - 1):0{length}d}"
 
-import random
 import smtplib
 from email.message import EmailMessage
 from email.headerregistry import Address
-
 def send_otp_email(to_email, otp_code):
 
     # コンフィグから送信元メールアドレス取得
@@ -219,7 +194,7 @@ def guestauth_required(view):
             abort(400)
 
         # ゲスト認証情報取得
-        auth = get_guest_auth(token)
+        auth = db.crud.find_guest_auth(token)
         if not auth:
             abort(404)
 
@@ -256,7 +231,7 @@ def guestauth_required(view):
 
         # 有効期限設定（初回アクセス時）
         if auth["token_type"] == "download":
-            update_download_expires(token)
+            db.crud.update_download_expires(token)
 
         return view(*args, **kwargs)
     return wrapped
@@ -266,7 +241,7 @@ def guestauth_required(view):
 # ------------------------
 @guest_bp.route("/download/<token>", methods=["GET"])
 @guestauth_required
-def guest_download_request(token):
+def guest_download(token):
 
     # アクセスログ
     if hasattr(g, "access_log"):
@@ -275,7 +250,7 @@ def guest_download_request(token):
         })
 
     # ダウンロードトークンからダウンロードリクエスト情報取得
-    download_request = get_download_request_by_token(token)
+    download_request = db.crud.get_download_request_by_token(token)
 
     if download_request is None:
         abort(404)
@@ -288,13 +263,13 @@ def guest_download_request(token):
         })
 
     # アップロード依頼情報取得
-    upload_request = get_upload_request(download_request["upload_request_id"])
+    upload_request = db.crud.get_upload_request(download_request["upload_request_id"])
 
     if upload_request is None:
         abort(404)
 
     # ファイルリスト取得
-    files = list_files(download_request["upload_request_id"])
+    files = db.crud.list_files(download_request["upload_request_id"])
 
     return render_template(
         "guest_download.html",
@@ -318,7 +293,7 @@ def guest_download_file(token, file_id):
         })
     
     # ダウンロードトークンからダウンロードリクエスト情報取得
-    download_request = get_download_request_by_token(token)
+    download_request = db.crud.get_download_request_by_token(token)
 
     if download_request is None:
         abort(404)
@@ -331,7 +306,7 @@ def guest_download_file(token, file_id):
         })
 
     # ファイル情報取得
-    file_row = get_file(file_id)
+    file_row = db.crud.get_file(file_id)
 
     # ファイル情報存在チェック
     if file_row is None:
@@ -349,12 +324,12 @@ def guest_download_file(token, file_id):
         abort(404)
 
     # ダウンロード回数チェック
-    current_count = get_download_count(download_request["id"], file_id)
+    current_count = db.crud.get_file_download_count(download_request["id"], file_id)
     if current_count >= download_request["max_downloads"]:
         abort(403, description="ダウンロード回数の上限に達しました")
 
     # ダウンロード回数更新
-    increment_download_count(download_request["id"], file_id)
+    db.crud.increment_file_download_count(download_request["id"], file_id)
 
     return send_file(
         file_path,
@@ -376,7 +351,7 @@ def guest_download_zip(token):
         })
 
     # ダウンロードトークンからダウンロードリクエスト情報取得
-    download_request = get_download_request_by_token(token)
+    download_request = db.crud.get_download_request_by_token(token)
     if download_request is None:
         abort(404)
 
@@ -387,14 +362,14 @@ def guest_download_zip(token):
             "download_request_id": download_request["id"],
         })
 
-    files = list_files(download_request["upload_request_id"])
+    files = db.crud.list_files(download_request["upload_request_id"])
     if not files:
         abort(404)
 
     # ダウンロード回数チェック
     available_files = []
     for f in files:
-        current_count = get_download_count(download_request["id"], f["file_id"])
+        current_count = db.crud.get_file_download_count(download_request["id"], f["file_id"])
         if current_count < download_request["max_downloads"]:
             available_files.append(f)
 
@@ -422,7 +397,7 @@ def guest_download_zip(token):
 
     # ダウンロード回数更新
     for f in available_files:
-        increment_download_count(download_request["id"], f["file_id"])
+        db.crud.increment_file_download_count(download_request["id"], f["file_id"])
 
     return Response(
         stream_with_context(generate()),
@@ -437,7 +412,7 @@ def guest_download_zip(token):
 # ------------------------
 @guest_bp.route("/upload/<token>", methods=["GET"])
 @guestauth_required
-def guest_upload_request(token):
+def guest_upload(token):
 
     # アクセスログ
     if hasattr(g, "access_log"):
@@ -446,7 +421,7 @@ def guest_upload_request(token):
         })
 
     # アップロードトークンからアップロードリクエスト情報取得
-    upload_request = get_upload_request_by_token(token)
+    upload_request = db.crud.get_upload_request_by_token(token)
 
     if upload_request is None:
         abort(404)
@@ -458,7 +433,7 @@ def guest_upload_request(token):
         })
 
     # ファイルリスト取得
-    files = list_files(upload_request["id"])
+    files = db.crud.list_files(upload_request["id"])
 
     return render_template(
         "guest_upload.html",
@@ -483,7 +458,7 @@ def guest_upload_file(token):
         })
 
     # アップロード依頼情報取得
-    upload_request = get_upload_request_by_token(token)
+    upload_request = db.crud.get_upload_request_by_token(token)
     if upload_request is None:
         abort(404)
 
@@ -503,7 +478,7 @@ def guest_upload_file(token):
     with sigleSemaphore:
 
         # アップロード済みファイル情報取得
-        uploaded_files = list_files(upload_request["id"])
+        uploaded_files = db.crud.list_files(upload_request["id"])
 
         # 現在のファイルサイズ合計を取得
         total_size = sum(f["file_size"] for f in uploaded_files)
@@ -543,8 +518,8 @@ def guest_upload_file(token):
                 })
 
             # ファイルテーブル挿入
-            create_file(upload_request["id"], file_id, f.filename, file_size)
-            file = get_file(file_id)
+            db.crud.create_file(upload_request["id"], file_id, f.filename, file_size)
+            file = db.crud.get_file(file_id)
 
     return jsonify({
         "file_id": file_id,

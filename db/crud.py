@@ -4,146 +4,6 @@ from datetime import datetime, timedelta
 from .connection import get_db
 
 # ------------------------
-# DB初期化
-# ------------------------
-def init_db(db_path):
-    with sqlite3.connect(db_path) as conn:
-        cur = conn.cursor()
-
-        # ------------------------
-        # ユーザー情報
-        # ------------------------
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                login_id TEXT UNIQUE,         -- ユーザーID
-                name TEXT,                    -- 名前
-                mail TEXT,                    -- メールアドレス
-                update_flag INTEGER DEFAULT 1 -- 1=更新OK, 0=更新不可
-            )
-        """)
-
-        # ------------------------
-        # アップロード依頼
-        # ------------------------
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS upload_requests (
-                id TEXT PRIMARY KEY,          -- UUID
-                upload_token TEXT UNIQUE,     -- URL用トークン
-                created_by TEXT,              -- ユーザーID
-                title TEXT,                   -- 件名
-                expires_at TEXT,              -- 有効期限
-                max_files INTEGER,            -- アップロードできるファイル数
-                max_total_size INTEGER,       -- アップロードできる合計サイズ
-
-                auth_type TEXT,
-                auth_password TEXT,
-                auth_email TEXT,
-
-                created_at TEXT
-            )
-        """)
-
-        # ------------------------
-        # ダウンロード依頼
-        # ------------------------
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS download_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                upload_request_id TEXT,
-                download_token TEXT UNIQUE,   -- URL用トークン
-                expire_days INTEGER,          -- 有効日数
-                expires_at TEXT,              -- 有効期限
-                max_downloads INTEGER,        -- 最大ダウンロード回数
-
-                auth_type TEXT,
-                auth_password TEXT,
-                auth_email TEXT,
-
-                created_at TEXT,
-                FOREIGN KEY(upload_request_id)
-                    REFERENCES upload_requests(id)
-            )
-        """)
-
-        # ------------------------
-        # ファイル実体
-        # ------------------------
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS files (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                upload_request_id TEXT,
-                file_id TEXT UNIQUE,          -- 保存用UUID
-                original_name TEXT,
-                file_size INTEGER,
-                uploaded_at TEXT,
-                uploaded_by_type TEXT,        -- internal / external
-                FOREIGN KEY(upload_request_id)
-                    REFERENCES upload_requests(id)
-            )
-        """)
-
-        # ------------------------
-        # ファイルダウンロード回数
-        # ------------------------
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS download_counts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                download_request_id TEXT,
-                file_id TEXT,
-                download_count INTEGER DEFAULT 1,
-                FOREIGN KEY(download_request_id)
-                    REFERENCES download_requests(id)
-                UNIQUE(download_request_id, file_id)
-            )
-        """)
-
-        # ------------------------
-        # ワンタイムパスワード
-        # ------------------------
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS otps (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                token TEXT NOT NULL,
-                email TEXT NOT NULL,
-                otp_code TEXT NOT NULL,
-                expires_at TEXT NOT NULL,
-                verified INTEGER DEFAULT 0,
-                created_at TEXT NOT NULL
-            )
-        """)
-
-        # ------------------------
-        # アクセスログ
-        # ------------------------
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS access_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-                -- いつ
-                accessed_at TEXT NOT NULL,             -- ISO8601
-                -- 誰が
-                user_id TEXT,                          -- internal: login_id, guest: 'guest'
-
-                -- 何に
-                action TEXT,
-                upload_request_id TEXT,
-                download_request_id TEXT,
-                file_id TEXT,
-
-                -- 結果
-                result TEXT NOT NULL,                  -- success / denied / expired / error
-                http_status INTEGER,                   -- 200 / 403 / 404 / 500 など
-
-                -- クライアント情報
-                ip_address TEXT,
-                user_agent TEXT
-            )
-        """)
-
-        conn.commit()
-
-# ------------------------
 # ログインユーザ情報保存
 # ------------------------
 def save_login_user(login_id, name, mail):
@@ -231,7 +91,7 @@ def get_upload_request(id):
 # ------------------------
 # アップロード依頼取得（検索Key：upload_token）
 # ------------------------
-def get_upload_request_by_token(upload_token):
+def get_upload_request_by_token(token):
     db = get_db()
     cur = db.execute("""
         SELECT
@@ -247,7 +107,7 @@ def get_upload_request_by_token(upload_token):
         FROM upload_requests ur
         WHERE ur.upload_token = ?
     """, (
-        upload_token,
+        token,
     ))
     return cur.fetchone()
 
@@ -289,6 +149,18 @@ def list_upload_requests(user_id):
         user_id,
     ))
     return cur.fetchall()
+
+# ------------------------
+# アップロード依頼削除
+# ------------------------
+def delete_upload_request(upload_id):
+    db = get_db()
+    db.execute("""
+        DELETE FROM upload_requests WHERE id = ?
+    """, (
+        upload_id,
+    ))
+    db.commit()
 
 # ------------------------
 # ファイル生成
@@ -474,9 +346,21 @@ def list_download_requests(upload_id):
     return cur.fetchall()
 
 # ------------------------
+# ダウンロード依頼削除
+# ------------------------
+def delete_download_request(download_id):
+    db = get_db()
+    db.execute("""
+        DELETE FROM download_requests WHERE id = ?
+    """, (
+        download_id,
+    ))
+    db.commit()
+
+# ------------------------
 # ゲスト認証情報取得
 # ------------------------
-def get_guest_auth(token):
+def find_guest_auth(token):
     db = get_db()
     cur = db.execute("""
         SELECT
@@ -584,7 +468,7 @@ def confirm_otp(token, otp_code):
 # ------------------------
 # ダウンロード回数取得
 # ------------------------
-def get_download_count(download_request_id, file_id):
+def get_file_download_count(download_request_id, file_id):
     db = get_db()
     cur = db.execute(
         """
@@ -601,7 +485,7 @@ def get_download_count(download_request_id, file_id):
 # ------------------------
 # ダウンロード回数インクリメント
 # ------------------------
-def increment_download_count(download_request_id, file_id):
+def increment_file_download_count(download_request_id, file_id):
 
     db = get_db()
     db.execute(
@@ -663,7 +547,7 @@ def save_access_log(log: dict):
 # ------------------------
 # アクセスログ取得
 # ------------------------
-def get_access_logs(par_page=None, offset=0, upload_request_id=None):
+def list_access_logs(per_page=None, offset=0, upload_request_id=None):
     db = get_db()
     cur = db.cursor()
 
@@ -699,9 +583,9 @@ def get_access_logs(par_page=None, offset=0, upload_request_id=None):
 
     sql += " ORDER BY al.accessed_at DESC"
 
-    if par_page:
+    if per_page:
         sql += " LIMIT ? OFFSET ?"
-        params.extend([par_page, offset])
+        params.extend([per_page, offset])
 
     cur.execute(sql, params)
     return cur.fetchall()
