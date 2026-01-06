@@ -81,7 +81,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.config.update(
     SESSION_TYPE='filesystem',
     SESSION_FILE_DIR='/tmp/flask_session',            # 明示推奨
-    SESSION_PERMANENT=False,                          # デフォルトでブラウザ終了で破棄
+    SESSION_PERMANENT=True,                           # セッションを残す
+    PERMANENT_SESSION_LIFETIME=timedelta(days=7),
     SESSION_COOKIE_EXPIRES=False,                     # Cookieの有効期限なし
     SESSION_COOKIE_HTTPONLY=True,                     # JSからアクセス不可
     SESSION_COOKIE_SECURE=os.getenv("FLASK_ENV") != "development",  # HTTPS時のみ送信
@@ -153,6 +154,7 @@ def login():
         password = request.form.get("password")
 
         if authenticate_with_gs(username, password):
+            session.permanent = True
             session["user_id"] = username
 
             # アクセスログ

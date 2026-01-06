@@ -69,6 +69,7 @@ def guest_auth(token):
             if input_password == auth["auth_password"]:
                 if token not in authenticated_tokens:
                     authenticated_tokens.append(token)                
+                session.permanent = True
                 session["authenticated_tokens"] = authenticated_tokens
 
                 # アクセスログ
@@ -109,7 +110,8 @@ def guest_auth(token):
                 otp = db.crud.confirm_otp(token, otpcode)
                 if otp:
                     if token not in authenticated_tokens:
-                        authenticated_tokens.append(token)                
+                        authenticated_tokens.append(token)
+                    session.permanent = True
                     session["authenticated_tokens"] = authenticated_tokens
 
                     # アクセスログ
