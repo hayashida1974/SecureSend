@@ -503,12 +503,12 @@
               
             </div><!-- １行目 -->
 
-            <!-- ２行目 -->
+            <!-- ２行目（認証方式） -->
             <div class="row g-3 m-1">
 
               <!-- 認証説明 -->
-              <div class="col-md-6">
-                <label class="form-label">＜＜認証方式説明＞＞</label>
+              <div v-if="auth_type!=''" class="col-md-4">
+                <label class="form-label">【認証方式説明】</label>
                 <br/>
                 <label v-if="auth_type=='none'" class="form-label">
                   ダウンロードURLのみで認証なしにアクセスできます。
@@ -522,7 +522,7 @@
               </div>
 
               <!-- パスワード -->
-              <div v-if="auth_type=='pass'" class="col-md-6">
+              <div v-if="auth_type=='pass'" class="col-md-4">
                 <label class="form-label small">パスワード</label>
                 <input
                   type="text"
@@ -533,15 +533,20 @@
               </div>
 
               <!-- メール -->
-              <div v-if="auth_type=='mail'" class="col-md-6">
-                <label class="form-label small">メールアドレス</label>
+              <div v-if="auth_type=='mail'" class="col-md-8">
+                <label class="form-label small">メールアドレス（複数入力できます）</label>
                 <input
-                  type="email"
+                  type="text"
                   class="form-control"
+                  id="auth_email"
                   v-model="auth_email"
                   placeholder="本人確認用のメールアドレスを入力"
                   required>
-              </div>
+              <!-- 抽出結果表示 -->
+              <div class="mt-2 text-muted small text-end">
+                メールアドレス数：{{ extractedEmails.length }} 件<br>
+              </div>                  
+            </div>
 
             </div><!-- ２行目 -->
           </form><!-- ダウンロードURL発行 -->
@@ -808,6 +813,24 @@
           document.getElementById("confirmDownloadUrlDeleteModal")
         );
       },
+      computed: {
+        extractedEmails() {
+          if (!this.auth_email) {
+            return []
+          }
+          const matches = this.auth_email.match(
+            /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+          )
+          // 重複除外
+          return matches ? [...new Set(matches)] : []
+        }
+      },
+      watch: {
+        auth_email() {
+          const emailEl = document.getElementById('auth_email');
+          if (emailEl) emailEl.setCustomValidity('');
+        }
+      },      
       methods: {
         addDownloadUrl(downloadUrl) {
           this.downloadUrls.push(downloadUrl);
@@ -855,9 +878,18 @@
 
           // バリデーションチェック
           const form = document.getElementById('issueForm');
+
+          // ブラウザ標準チェック
           if (!form.checkValidity()) {
-            // NGならブラウザ標準のエラー表示
             form.reportValidity();
+            return;
+          }
+
+          // 独自チェック
+          if (this.auth_type=='mail' && this.extractedEmails.length <= 0) {
+            const emailEl = document.getElementById('auth_email');
+            emailEl.setCustomValidity('メールアドレスは1件以上入力してください');
+            emailEl.reportValidity();
             return;
           }
 

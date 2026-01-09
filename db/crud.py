@@ -1,12 +1,23 @@
 import sqlite3
 import uuid
 from datetime import datetime, timedelta
+from werkzeug.security import generate_password_hash, check_password_hash
 from .connection import get_db
+
+# ------------------------
+# ユーザリスト取得
+# ------------------------
+def list_users():
+    db = get_db()
+    cur = db.execute("""
+        SELECT * FROM users ORDER BY id
+    """)
+    return cur.fetchall()
 
 # ------------------------
 # ログインユーザ情報保存
 # ------------------------
-def save_login_user(login_id, name, mail):
+def save_login_user(login_id, name, mail, external='', admin_flag=0, disabled_flag=0, password=None):
 
     db = get_db()
     cur = db.cursor()
@@ -15,21 +26,64 @@ def save_login_user(login_id, name, mail):
     cur.execute("SELECT * FROM users WHERE login_id = ?", (login_id,))
     row = cur.fetchone()
 
+    # パスワードが設定されていればハッシュ化
+    if password:
+        password = generate_password_hash(password)
+
     if row is None:
         # 存在しなければINSERT
         cur.execute("""
-            INSERT INTO users (login_id, name, mail, update_flag)
-            VALUES (?, ?, ?, 1)
-        """, (login_id, name, mail))
+            INSERT INTO users (login_id, password, name, mail, external, admin_flag, disabled_flag)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (login_id, password, name, mail, external, admin_flag, disabled_flag))
     else:
-        if row["update_flag"] == 1:
-            # update_flag が 1 の場合のみ更新
-            cur.execute("""
-                UPDATE users SET name = ?, mail = ? WHERE login_id = ?
-            """, (name, mail, login_id))
+        # 存在すればUPDATE
+        fields = ["name = ?", "mail = ?", "admin_flag = ?", "disabled_flag = ?"]
+        params = [name, mail, admin_flag, disabled_flag]
+
+        if password and not external:
+            fields.append("password = ?")
+            params.append(password)
+
+        params.append(login_id)
+        sql = f"UPDATE users SET {', '.join(fields)} WHERE login_id = ?"
+        cur.execute(sql, params)
 
     db.commit()
     return True
+
+# ------------------------
+# ユーザパスワード検証
+# ------------------------
+def confirm_password(login_id, password):
+    db = get_db()
+    cur = db.cursor()
+
+    # ユーザー取得
+    cur.execute(
+        "SELECT password FROM users WHERE external = '' AND login_id = ? and disabled_flag = 0",
+        (login_id,)
+    )
+    row = cur.fetchone()
+    if row is None:
+        return False
+
+    hashed_password = row
+
+    # パスワード検証
+    return check_password_hash(hashed_password, password)
+
+# ------------------------
+# ユーザ削除
+# ------------------------
+def delete_user(id):
+    db = get_db()
+    db.execute("""
+        DELETE FROM users WHERE id = ?
+    """, (
+        id,
+    ))
+    db.commit()
 
 # ------------------------
 # アップロード依頼生成
@@ -402,6 +456,9 @@ def find_guest_auth(token):
 # ------------------------
 def create_otp(token, email, otp_code, expire_min = 10):
 
+    # ワンタイムパスワードハッシュ化
+    otp_code = generate_password_hash(otp_code)
+
     # 現在時刻
     created_at = datetime.now()
     # 有効期限をexpire_min分後に設定
@@ -432,38 +489,42 @@ def create_otp(token, email, otp_code, expire_min = 10):
     return db.execute("SELECT last_insert_rowid()").fetchone()[0]
 
 # ------------------------
-# ワンタイムパスワード検索
+# ワンタイムパスワード検証
 # ------------------------
-def confirm_otp(token, otp_code):
+def confirm_otp(token, email, otp_code):
 
     db = get_db()
-    cur = db.execute("""
-        SELECT
-            *
+    row = db.execute("""
+        SELECT id, otp_code, expires_at
         FROM otps
-        WHERE token = ? AND otp_code = ? AND verified = 0
-    """, (
-        token,
-        otp_code,
-    ))
-    otp = cur.fetchone()
-    if not otp:
-        return None
+        WHERE token = ?
+          AND email = ?
+          AND verified = 0
+        ORDER BY created_at DESC
+        LIMIT 1
+    """, (token, email)).fetchone()
 
-    # 有効期限チェック
-    expires_at = datetime.fromisoformat(otp["expires_at"])
-    if datetime.now() > expires_at:
-        return None
+    if row is None:
+        return False
 
-    # OTP を使用済みにする
-    db.execute("""
-        UPDATE otps
-        SET verified = 1
-        WHERE id = ?
-    """, (otp["id"],))
+    if datetime.now() > datetime.fromisoformat(row["expires_at"]):
+        db.execute(
+            "UPDATE otps SET verified = 1 WHERE id = ?",
+            (row["id"],)
+        )
+        db.commit()
+        return False
+
+    if not check_password_hash(row["otp_code"], otp_code):
+        return False
+
+    db.execute(
+        "UPDATE otps SET verified = 1 WHERE id = ?",
+        (row["id"],)
+    )
     db.commit()
 
-    return otp
+    return True
 
 # ------------------------
 # ダウンロード回数取得

@@ -37,6 +37,7 @@ from filters import (
     format_filesize,
     format_mask_email
 )
+from views.admin import admin_bp
 from views.guest import guest_bp
 import db
 
@@ -90,8 +91,13 @@ app.config.update(
 )
 Session(app)
 
-app.teardown_appcontext(db.close_db)
+# ----------------------------
+# Blueprint登録
+# ----------------------------
+app.register_blueprint(admin_bp)
 app.register_blueprint(guest_bp)
+
+app.teardown_appcontext(db.close_db)
 
 app.template_filter("datetime")(format_datetime)
 app.template_filter("filesize")(format_filesize)
@@ -153,7 +159,7 @@ def login():
         username = request.form.get("username")
         password = request.form.get("password")
 
-        if authenticate_with_gs(username, password):
+        if db.crud.confirm_password(username, password) or authenticate_with_gs(username, password):
             session.permanent = True
             session["user_id"] = username
 
@@ -163,8 +169,8 @@ def login():
                     "user_id": username,
                     "action": "login OK",
                 })
-
             return redirect(url_for("menu"))
+
         else:
             # アクセスログ
             if hasattr(g, "access_log"):
@@ -172,7 +178,6 @@ def login():
                     "user_id": username,
                     "action": "login NG",
                 })
-
             error = "ユーザー名またはパスワードが正しくありません"
 
     return render_template("login.html", error=error)
@@ -214,7 +219,7 @@ def authenticate_with_gs(username, password):
         mail = result.findtext("Mail1") or ""
 
         # ユーザー情報をテーブルに保存
-        db.crud.save_login_user(login_id, name, mail)
+        db.crud.save_login_user(login_id, name, mail, external='GroupSession')
         return True
     except Exception:
         return False
@@ -542,7 +547,7 @@ def delete_file(file_id):
 @login_required
 def generate_download_request():
 
-    # パラメータ取得
+    # パラメータ取得（VueJSからの依頼なのでJSON形式）
     payload = request.get_json()
     upload_request_id = payload["upload_request_id"]
     expire_days = payload["expire_days"]
@@ -662,84 +667,19 @@ def delete_upload_request(upload_id):
     files = db.crud.list_files(upload_id)
 
     # ファイル削除
+    upload_dir = os.path.join(UPLOAD_DIR, upload_id)
     for f in files:
-        upload_dir = os.path.join(UPLOAD_DIR, f["upload_request_id"])
         file_path = os.path.join(upload_dir, f["file_id"])
         os.remove(file_path)
+
     # フォルダ削除
-    os.rmdir(upload_dir)
+    if os.path.isdir(upload_dir):
+        os.rmdir(upload_dir)
 
     # アップロード依頼削除
     files = db.crud.delete_upload_request(upload_id)
 
     return "", 200
-
-# ------------------------
-# 操作ログ
-# ------------------------
-@app.route("/admin/access_logs")
-@login_required
-def access_logs():
-
-    page = int(request.args.get("page", 1))
-    per_page = int(request.args.get("per_page", 20))
-
-    page = request.args.get("page", 1, type=int)
-    offset = (page - 1) * per_page
-
-    # 総件数
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM access_logs")
-        total = cur.fetchone()[0]
-        total_pages = max(1, math.ceil(total / per_page))
-
-    # ログ取得
-    logs = db.crud.list_access_logs(per_page, offset)
-
-    return render_template(
-        "access_logs.html",
-        logs=logs,
-        page=page,
-        per_page=per_page,
-        total_pages=total_pages,
-    )
-
-# ------------------------
-# 設定画面
-# ------------------------
-@app.route("/admin/settings", methods=["GET", "POST"])
-@login_required
-def settings():
-
-    config = configparser.ConfigParser()
-    config.read(CONFIG_PATH, encoding="utf-8")
-
-    if request.method == "POST":
-        from_address = request.form.get("from_address", "").strip()
-
-        # 最低限のバリデーション
-        if not re.match(r"^[^@]+@[^@]+\.[^@]+$", from_address):
-            flash("メールアドレスの形式が正しくありません", "danger")
-            return redirect(url_for("settings_mail"))
-
-        if not config.has_section("mail"):
-            config.add_section("mail")
-
-        config.set("mail", "from_address", from_address)
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            config.write(f)
-
-        flash("設定を保存しました", "success")
-        return redirect(url_for("settings"))
-
-    from_address = config.get("mail", "from_address", fallback="")
-
-    return render_template(
-        "settings.html",
-        from_address=from_address
-    )
 
 # ------------------------
 # 実行

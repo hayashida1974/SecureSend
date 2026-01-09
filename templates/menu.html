@@ -50,7 +50,7 @@
   </div>
 
   <!-- Menu -->
-  <div class="row g-4">
+  <div class="row g-4 mb-4">
 
     <!-- Upload -->
     <div class="col-md-4">
@@ -69,9 +69,9 @@
 
                 <!-- Text -->
                 <div>
-                <h5 class="card-title mb-1">ファイルアップロード</h5>
+                <h5 class="card-title mb-1">ファイルBOX作成</h5>
                 <p class="card-text text-muted small mb-0">
-                    ファイルBOXを作成します。
+                    ファイルBOXを新規に作成します。
                 </p>
                 </div>
             </div>
@@ -108,10 +108,50 @@
         </div>
         </a>
     </div>
+  </div><!-- Menu -->
 
-    <!-- Access Logs -->
+  <!-- Admin Menu -->
+  <H5>管理者メニュー</H5>
+  <div class="row g-4">
+
+    <!-- Users -->
     <div class="col-md-4">
-        <a href="{{ url_for('access_logs') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('admin.users') }}" class="text-decoration-none text-dark">
+      <div class="card menu-card h-100">
+          <div class="card-body">
+          <div class="d-flex gap-3 align-items-start">
+
+            <svg width="40" height="40"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              viewBox="0 0 24 24"
+              class="text-warning mt-1">
+          
+              <!-- 頭 -->
+              <circle cx="12" cy="8" r="5"/>
+          
+              <!-- 肩・胴体 -->
+              <path d="M4 20c0-4 4-6 8-6s8 2 8 6"/>
+            </svg>
+                
+            <div>
+              <h5 class="card-title mb-1">ユーザー管理</h5>
+              <p class="card-text text-muted small mb-0">
+                  ユーザー情報をメンテナンスします。
+              </p>
+              </div>
+          </div>
+          </div>
+      </div>
+      </a>
+  </div>
+
+  <!-- Access Logs -->
+    <div class="col-md-4">
+        <a href="{{ url_for('admin.access_logs') }}" class="text-decoration-none text-dark">
         <div class="card menu-card h-100">
             <div class="card-body">
             <div class="d-flex gap-3 align-items-start">
@@ -148,7 +188,7 @@
 
     <!-- Settings -->
     <div class="col-md-4">
-        <a href="{{ url_for('settings') }}" class="text-decoration-none text-dark">
+        <a href="{{ url_for('admin.settings') }}" class="text-decoration-none text-dark">
         <div class="card menu-card h-100">
             <div class="card-body">
             <div class="d-flex gap-3 align-items-start">
@@ -196,7 +236,7 @@
         </a>
     </div>
 
-    </div>
+  </div>
 </div>
 
 </body>

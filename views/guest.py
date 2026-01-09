@@ -43,13 +43,75 @@ import db
 guest_bp = Blueprint("guest", __name__)
 
 # ------------------------
+# ゲスト認証必須デコレータ
+# ------------------------
+def guestauth_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        # request.args.get("token")： リクエストパラメータ
+        # kwargs.get("token")：URLパスの変数
+        token = kwargs.get("token")
+        if not token:
+            abort(400)
+
+        # ゲスト認証情報取得
+        auth = db.crud.find_guest_auth(token)
+        if not auth:
+            abort(404)
+
+        # アクセスログ
+        if hasattr(g, "access_log"):
+            g.access_log.update({
+                "user_id": auth["auth_email"],
+            })
+
+        # 有効期限チェック
+        expires_at = auth["expires_at"]
+        if expires_at:
+            try:
+                if auth["token_type"] == "upload":
+                    # YYYY-MM-DD
+                    expires_date = date.fromisoformat(expires_at)
+                    if expires_date < date.today():
+                        abort(403, description="このアップロードリンクは期限切れです")
+
+                elif auth["token_type"] == "download":
+                    # YYYY-MM-DDTHH:MM:SS
+                    expires_dt = datetime.fromisoformat(expires_at)
+                    if expires_dt < datetime.now():
+                        abort(403, description="このダウンロードリンクは期限切れです")
+            except ValueError:
+                # expires_at が壊れている場合
+                abort(403)
+
+        # 認証方式がある場合は認証画面へリダイレクト
+        auth_type = auth["auth_type"]
+        if auth_type in ("pass", "mail"):
+            authenticated_tokens = session.get("authenticated_tokens", [])
+            if token not in authenticated_tokens:
+                return redirect(url_for(
+                    "guest.guest_auth",
+                    auth_type=auth_type,
+                    token=token
+                ))
+        # 認証なしならそのまま通す
+
+        # 有効期限設定（初回アクセス時）
+        if auth["token_type"] == "download":
+            db.crud.update_download_expires(token)
+
+        return view(*args, **kwargs)
+    return wrapped
+
+# ------------------------
 # ゲスト認証画面
 # ------------------------
 @guest_bp.route("/guest_auth/<token>", methods=["GET", "POST"])
 def guest_auth(token):
     error = None
+    mail_address = None
 
-    # ゲスト認証情報取得
+    # ゲスト認証方式取得（トークンにより認証方式が異なる）
     auth = db.crud.find_guest_auth(token)
     if not auth:
         abort(404)
@@ -64,6 +126,7 @@ def guest_auth(token):
     authenticated_tokens = session.get("authenticated_tokens", [])
 
     if request.method == "POST":
+        # パスワード認証
         if auth_type == "pass":
             input_password = request.form.get("password", "")
             if input_password == auth["auth_password"]:
@@ -88,27 +151,49 @@ def guest_auth(token):
 
                 error = "パスワードが違います"
 
+        # メール本人確認
         elif auth_type == "mail":
-            # POST時にOTP入力か、最初のアクセス時にOTP送信
+            # １回目：ワンタイムパスワード送信
             if 'send_otp' in request.form:
 
-                # アクセスログ
-                if hasattr(g, "access_log"):
-                    g.access_log.update({
-                        "action": "otp send",
-                    })
+                # 登録されているメールアドレスかチェック
+                auth_emails = extract_emails(auth["auth_email"])
+                mail_address = request.form.get("mail_address")
+                if len(auth_emails) == 1:
+                    mail_address = auth_emails[0]
 
-                # ワンタイムパスワード生成
-                otp_code = generate_otp()
-                # テーブル登録
-                db.crud.create_otp(token, auth["auth_email"], otp_code)
-                # メール送信
-                send_otp_email(auth["auth_email"], otp_code)
-                auth_type = "otp_pass"
+                if mail_address in auth_emails:
+                    # アクセスログ
+                    if hasattr(g, "access_log"):
+                        g.access_log.update({
+                            "user_id": mail_address,
+                            "action": "otp send",
+                        })
+
+                    # ワンタイムパスワード生成
+                    otp_code = generate_otp()
+                    # テーブル登録
+                    db.crud.create_otp(token, mail_address, otp_code)
+                    # メール送信
+                    send_otp_email(mail_address, otp_code)
+                    auth_type = "otp_pass"
+                else:
+                    # アクセスログ
+                    if hasattr(g, "access_log"):
+                        g.access_log.update({
+                            "user_id": mail_address,
+                            "action": "mail address NG",
+                        })
+
+                    error = "このメールアドレスは登録されていません"
+                    auth_type = "mail"
+
+            # ２回目：ワンタイムパスワード検証
             else:
+                mail_address = request.form.get("mail_address")
                 otpcode = request.form.get("otpcode", "")
-                otp = db.crud.confirm_otp(token, otpcode)
-                if otp:
+                
+                if db.crud.confirm_otp(token, mail_address, otpcode):
                     if token not in authenticated_tokens:
                         authenticated_tokens.append(token)
                     session.permanent = True
@@ -128,16 +213,23 @@ def guest_auth(token):
                             "action": "auth NG",
                         })
 
-                    auth_type = "otp_pass"
                     error = "ワンタイムパスワードが正しくありません"
+                    auth_type = "otp_pass"
 
     return render_template(
         "guest_auth.html",
         token=token,
+        mail_address=mail_address,
         auth_type=auth_type,
-        auth_email=auth["auth_email"],
+        auth_emails=extract_emails(auth["auth_email"]),
         error=error
     )
+
+def extract_emails(text):
+    # メールアドレスの正規表現パターン
+    pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+    # findallで全ての一致をリストで取得
+    return re.findall(pattern, text)
 
 import random
 def generate_otp(length=6):
@@ -184,59 +276,6 @@ def send_otp_email(to_email, otp_code):
 
     with smtplib.SMTP("mail.system-prostage.co.jp", 25) as smtp:
         smtp.send_message(msg)
-
-# ゲスト認証必須デコレータ
-def guestauth_required(view):
-    @wraps(view)
-    def wrapped(*args, **kwargs):
-        # request.args.get("token")： リクエストパラメータ
-        # kwargs.get("token")：URLパスの変数
-        token = kwargs.get("token")
-        if not token:
-            abort(400)
-
-        # ゲスト認証情報取得
-        auth = db.crud.find_guest_auth(token)
-        if not auth:
-            abort(404)
-
-        # 有効期限チェック
-        expires_at = auth["expires_at"]
-        if expires_at:
-            try:
-                if auth["token_type"] == "upload":
-                    # YYYY-MM-DD
-                    expires_date = date.fromisoformat(expires_at)
-                    if expires_date < date.today():
-                        abort(403, description="このアップロードリンクは期限切れです")
-
-                elif auth["token_type"] == "download":
-                    # YYYY-MM-DDTHH:MM:SS
-                    expires_dt = datetime.fromisoformat(expires_at)
-                    if expires_dt < datetime.now():
-                        abort(403, description="このダウンロードリンクは期限切れです")
-            except ValueError:
-                # expires_at が壊れている場合
-                abort(403)
-
-        # 認証方式がある場合は認証画面へリダイレクト
-        auth_type = auth["auth_type"]
-        if auth_type in ("pass", "mail"):
-            authenticated_tokens = session.get("authenticated_tokens", [])
-            if token not in authenticated_tokens:
-                return redirect(url_for(
-                    "guest.guest_auth",
-                    auth_type=auth_type,
-                    token=token
-                ))
-        # 認証なしならそのまま通す
-
-        # 有効期限設定（初回アクセス時）
-        if auth["token_type"] == "download":
-            db.crud.update_download_expires(token)
-
-        return view(*args, **kwargs)
-    return wrapped
 
 # ------------------------
 # ゲスト向けダウンロード一覧画面

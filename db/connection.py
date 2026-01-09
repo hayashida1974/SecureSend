@@ -1,5 +1,6 @@
 import sqlite3
 from flask import g
+from werkzeug.security import generate_password_hash
 from paths import DB_PATH
 
 def init_db():
@@ -12,12 +13,44 @@ def init_db():
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                login_id TEXT UNIQUE,         -- ユーザーID
-                name TEXT,                    -- 名前
-                mail TEXT,                    -- メールアドレス
-                update_flag INTEGER DEFAULT 1 -- 1=更新OK, 0=更新不可
+                login_id TEXT UNIQUE,          -- ユーザーID
+                password TEXT,                 -- パスワード
+                name TEXT,                     -- 名前
+                mail TEXT,                     -- メールアドレス
+                external TEXT,                 -- 外部ユーザー
+                admin_flag INTEGER DEFAULT 0,  -- 1=管理者, 0=一般
+                disabled_flag INTEGER DEFAULT 0 -- 1=利用不可, 0=利用可能
             )
         """)
+
+        # ------------------------
+        # ユーザー存在チェック
+        # ------------------------
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM users
+        """)
+        admin_count = cur.fetchone()[0]
+
+        # ------------------------
+        # 初期管理者作成
+        # ------------------------
+        if admin_count == 0:
+            admin_pass = generate_password_hash("ssend_admin")
+            cur.execute("""
+                INSERT INTO users (
+                    login_id,
+                    password,
+                    name,
+                    external,
+                    disabled_flag,
+                    admin_flag
+                ) VALUES (?, ?, ?, '', 0, 1)
+            """, (
+                "ssend_admin",
+                admin_pass,
+                "システム管理者"
+            ))
 
         # ------------------------
         # アップロード依頼

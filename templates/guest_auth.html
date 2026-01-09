@@ -63,19 +63,27 @@
             <label class="form-label small">メールアドレス</label>
             <!-- マスクしたメールを表示 -->
             <input
-              type="text"
+              type="mail"
               class="form-control"
-              value="{{ auth_email | mask_email }}"
-              readonly
+              name="mail_address"
+              {% if auth_emails|length == 1 %}
+                value="{{ auth_emails[0] | mask_email }}"
+                readonly
+              {% else %}
+                required
+              {% endif %}
             >
           </div>
           <input type="hidden" name="send_otp" value="1">
         {% endif %}
 
         {% if auth_type == 'otp_pass' %}
+          <input type="hidden" name="mail_address" value="{{ mail_address }}">
+
           <div class="mb-4">
             <label class="form-label">
-              ワンタイムパスワードを送信しました。
+              ワンタイムパスワードを送信しました。<br/>
+              メールに記載されている認証コードを入力してください。
             </label>
           </div>
           <div class="mb-3">
@@ -97,17 +105,6 @@
     </div>
   </div>
 </div>
-
-<script>
-  function sendOtp() {
-      // Ajax で OTP送信
-      fetch('/send_otp', { method: 'POST', body: new FormData(document.forms[0]) })
-          .then(() => {
-              document.getElementById('send-otp').style.display = 'none';
-              document.getElementById('password-box').style.display = 'block';
-          });
-  }
-</script>
 
 </body>
 </html>
