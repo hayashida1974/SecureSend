@@ -34,7 +34,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_session import Session
 
 from paths import CONFIG_PATH, UPLOAD_DIR, DB_PATH
-from filters import format_datetime, format_filesize, format_mask_email
+from views.filters import format_datetime, format_filesize, format_mask_email
 import db
 
 # ------------------------
@@ -43,9 +43,23 @@ import db
 admin_bp = Blueprint("admin", __name__)
 
 # ------------------------
+# 監視者ログイン必須デコレータ
+# ------------------------
+def admin_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("internal.login"))
+        if session["admin"] == False:
+            return redirect(url_for("internal.login"))
+        return view(*args, **kwargs)
+    return wrapped
+
+# ------------------------
 # ユーザー管理
 # ------------------------
 @admin_bp.route("/admin/users", methods=["GET", "POST"])
+@admin_required
 def users():
 
     if request.method == "POST":
@@ -77,15 +91,43 @@ def users():
 # ユーザー削除
 # ------------------------
 @admin_bp.route("/delete/<int:user_id>")
+@admin_required
 def delete_user(user_id):
 
     db.crud.delete_user(user_id)
     return redirect(url_for("admin.users"))
 
 # ------------------------
+# ファイルボックス管理
+# ------------------------
+@admin_bp.route("/admin/file_boxes", methods=["GET"])
+@admin_required
+def file_boxes():
+
+    page = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 20))
+
+    page = request.args.get("page", 1, type=int)
+    offset = (page - 1) * per_page
+
+    # アップロード依頼リスト取得
+    user_id = session["user_id"]
+    upload_requests, total = db.crud.list_upload_requests(per_page=per_page, offset=offset)
+    total_pages = max(1, math.ceil(total / per_page))
+
+    return render_template(
+        "admin_boxes.html",
+        upload_requests=upload_requests,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+    )
+
+# ------------------------
 # 操作ログ
 # ------------------------
 @admin_bp.route("/admin/access_logs")
+@admin_required
 def access_logs():
 
     page = int(request.args.get("page", 1))
@@ -117,6 +159,7 @@ def access_logs():
 # 設定画面
 # ------------------------
 @admin_bp.route("/admin/settings", methods=["GET", "POST"])
+@admin_required
 def settings():
 
     config = configparser.ConfigParser()
@@ -138,7 +181,7 @@ def settings():
             config.write(f)
 
         flash("設定を保存しました", "success")
-        return redirect(url_for("settings"))
+        return redirect(url_for("admin.settings"))
 
     from_address = config.get("mail", "from_address", fallback="")
 

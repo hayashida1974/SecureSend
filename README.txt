@@ -15,9 +15,14 @@ where python
 # Flaskをインストール
 pip install flask
 
-# その他のライブラリインストール
-pip install requests
+# Flask関連ライブラリをインストール
 pip install Flask-Session
+pip install flask-seasurf
+
+# その他のライブラリインストール
+pip install python-dotenv
+pip install requests
+pip install cryptography
 
 # 実行
 python app.py

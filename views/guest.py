@@ -1,6 +1,5 @@
 import os
 import uuid
-import sqlite3
 import io
 import math
 import zipfile
@@ -8,7 +7,6 @@ from datetime import date, datetime, timedelta
 from functools import wraps
 import requests
 import threading
-import xml.etree.ElementTree as ET
 import json
 import configparser
 import re
@@ -34,7 +32,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_session import Session
 
 from paths import CONFIG_PATH, UPLOAD_DIR, DB_PATH
-from filters import format_datetime, format_filesize, format_mask_email
+from views.filters import format_datetime, format_filesize, format_mask_email
 import db
 
 # ------------------------
@@ -54,7 +52,7 @@ def guestauth_required(view):
         if not token:
             abort(400)
 
-        # ゲスト認証情報取得
+        # ゲスト認証情報取得（有効期限チェックは関数内で実施）
         auth = db.crud.find_guest_auth(token)
         if not auth:
             abort(404)
@@ -64,25 +62,6 @@ def guestauth_required(view):
             g.access_log.update({
                 "user_id": auth["auth_email"],
             })
-
-        # 有効期限チェック
-        expires_at = auth["expires_at"]
-        if expires_at:
-            try:
-                if auth["token_type"] == "upload":
-                    # YYYY-MM-DD
-                    expires_date = date.fromisoformat(expires_at)
-                    if expires_date < date.today():
-                        abort(403, description="このアップロードリンクは期限切れです")
-
-                elif auth["token_type"] == "download":
-                    # YYYY-MM-DDTHH:MM:SS
-                    expires_dt = datetime.fromisoformat(expires_at)
-                    if expires_dt < datetime.now():
-                        abort(403, description="このダウンロードリンクは期限切れです")
-            except ValueError:
-                # expires_at が壊れている場合
-                abort(403)
 
         # 認証方式がある場合は認証画面へリダイレクト
         auth_type = auth["auth_type"]
@@ -138,7 +117,7 @@ def guest_auth(token):
                 # アクセスログ
                 if hasattr(g, "access_log"):
                     g.access_log.update({
-                        "action": "auth OK",
+                        "action": "ゲスト認証 OK",
                     })
 
                 return redirect(url_for("guest.guest_download", token=token))
@@ -146,7 +125,7 @@ def guest_auth(token):
                 # アクセスログ
                 if hasattr(g, "access_log"):
                     g.access_log.update({
-                        "action": "auth NG",
+                        "action": "ゲスト認証 NG",
                     })
 
                 error = "パスワードが違います"
@@ -167,7 +146,7 @@ def guest_auth(token):
                     if hasattr(g, "access_log"):
                         g.access_log.update({
                             "user_id": mail_address,
-                            "action": "otp send",
+                            "action": "ワンタイムパスワード送信",
                         })
 
                     # ワンタイムパスワード生成
@@ -182,7 +161,7 @@ def guest_auth(token):
                     if hasattr(g, "access_log"):
                         g.access_log.update({
                             "user_id": mail_address,
-                            "action": "mail address NG",
+                            "action": "メールアドレス入力 NG",
                         })
 
                     error = "このメールアドレスは登録されていません"
@@ -202,7 +181,8 @@ def guest_auth(token):
                     # アクセスログ
                     if hasattr(g, "access_log"):
                         g.access_log.update({
-                            "action": "auth OK",
+                            "user_id": mail_address,
+                            "action": "ゲスト認証 OK",
                         })
 
                     return redirect(url_for("guest.guest_download", token=token))
@@ -210,7 +190,8 @@ def guest_auth(token):
                     # アクセスログ
                     if hasattr(g, "access_log"):
                         g.access_log.update({
-                            "action": "auth NG",
+                            "user_id": mail_address,
+                            "action": "ゲスト認証 NG",
                         })
 
                     error = "ワンタイムパスワードが正しくありません"
@@ -287,7 +268,7 @@ def guest_download(token):
     # アクセスログ
     if hasattr(g, "access_log"):
         g.access_log.update({
-            "action": "download list",
+            "action": "ゲストダウンロード画面表示",
         })
 
     # ダウンロードトークンからダウンロードリクエスト情報取得
@@ -329,7 +310,7 @@ def guest_download_file(token, file_id):
     # アクセスログ
     if hasattr(g, "access_log"):
         g.access_log.update({
-            "action": "file download",
+            "action": "ゲストファイルダウンロード",
             "file_id": file_id,
         })
     
@@ -372,8 +353,15 @@ def guest_download_file(token, file_id):
     # ダウンロード回数更新
     db.crud.increment_file_download_count(download_request["id"], file_id)
 
+    # 暗号化ファイルを読み込み
+    with open(file_path, "rb") as f:
+        encrypted_data = f.read()
+
+    # 複合化
+    decrypted_data = current_app.fernet.decrypt(encrypted_data)
+
     return send_file(
-        file_path,
+        io.BytesIO(decrypted_data),
         as_attachment=True,
         download_name=file_row["original_name"]
     )
@@ -388,7 +376,7 @@ def guest_download_zip(token):
     # アクセスログ
     if hasattr(g, "access_log"):
         g.access_log.update({
-            "action": "ZIP download",
+            "action": "ゲスト一括ダウンロード",
         })
 
     # ダウンロードトークンからダウンロードリクエスト情報取得
@@ -430,11 +418,22 @@ def guest_download_zip(token):
                 )
 
                 with open(file_path, "rb") as fp:
-                    zf.writestr(f["original_name"], fp.read())
+                    encrypted_data = fp.read()
+
+                # 複合化
+                try:
+                    decrypted_data = current_app.fernet.decrypt(encrypted_data)
+                except Exception as e:
+                    # 複合化失敗はスキップ
+                    continue
+
+                zf.writestr(f["original_name"], decrypted_data)
 
         buffer.seek(0)
         yield from buffer
-    zip_name = f"download_{download_request['id']}.zip"
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    zip_name = f"ssend_download_{timestamp}.zip"
 
     # ダウンロード回数更新
     for f in available_files:
@@ -458,7 +457,7 @@ def guest_upload(token):
     # アクセスログ
     if hasattr(g, "access_log"):
         g.access_log.update({
-            "action": "upload list",
+            "action": "ゲストアップロード画面表示",
         })
 
     # アップロードトークンからアップロードリクエスト情報取得
@@ -476,50 +475,91 @@ def guest_upload(token):
     # ファイルリスト取得
     files = db.crud.list_files(upload_request["id"])
 
+    # テーブルがVueなのでJSONに変換
+    upload_files_json = [{
+        "file_id": f["file_id"],
+        "original_name": f["original_name"],
+        "file_size": format_filesize(f["file_size"]),
+        "uploaded_at": format_datetime(f["uploaded_at"]),
+        "download_url": url_for(
+            "internal.download_file",
+            upload_id=upload_request["id"],
+            file_id=f["file_id"]
+        ),
+        "delete_url": url_for("internal.delete_file", file_id=f["file_id"]),
+    } for f in files]
+
     return render_template(
         "guest_upload.html",
         upload_request=upload_request,
-        files=files,
+        files_json=json.dumps(upload_files_json),
     )
 
 # ------------------------
 # ゲスト向けファイルアップロード
 # ------------------------
+sigleSemaphore = threading.Semaphore(1)
+
 @guest_bp.route("/guest_upload/<token>", methods=["POST"])
 @guestauth_required
 def guest_upload_file(token):
 
-    if "file" not in request.files:
+    if "file" not in request.files or len(request.files.getlist("file")) < 1:
         return "ファイルが選択されていません", 400
 
     # アクセスログ
     if hasattr(g, "access_log"):
         g.access_log.update({
-            "action": "file upload",
+            "action": "ゲストファイルアップロード",
         })
 
     # アップロード依頼情報取得
     upload_request = db.crud.get_upload_request_by_token(token)
     if upload_request is None:
         abort(404)
+    upload_id = upload_request["id"]
 
     # アクセスログ
     if hasattr(g, "access_log"):
         g.access_log.update({
-            "upload_request_id": upload_request["id"],
+            "upload_request_id": upload_id,
         })
 
-    # 有効期限チェック
-    if upload_request["expires_at"]:
-        expires_at = datetime.fromisoformat(upload_request["expires_at"])
-        if expires_at < datetime.now():
-            return "このアップロードURLは期限切れです", 403
-    
     # １件ずつ処理
     with sigleSemaphore:
 
+        # ファイルアップロード（Dropzoneなので1件のみ）
+        file = request.files.getlist("file")[0]
+
         # アップロード済みファイル情報取得
-        uploaded_files = db.crud.list_files(upload_request["id"])
+        uploaded_files = db.crud.list_files(upload_id)
+
+        # 同一ファイル名チェック
+        existing_file = next(
+            (f for f in uploaded_files if f["original_name"] == file.filename),
+            None
+        )
+
+        if existing_file:
+            # 既存ファイルの実体パス
+            old_path = os.path.join(
+                UPLOAD_DIR,
+                upload_request["id"],
+                existing_file["file_id"]
+            )
+
+            # 実ファイル削除
+            if os.path.exists(old_path):
+                os.remove(old_path)
+
+            # DBレコード削除
+            db.crud.delete_file(existing_file["file_id"])
+
+            # uploaded_files から除外（サイズ再計算のため）
+            uploaded_files = [
+                f for f in uploaded_files
+                if f["file_id"] != existing_file["file_id"]
+            ]
 
         # 現在のファイルサイズ合計を取得
         total_size = sum(f["file_size"] for f in uploaded_files)
@@ -528,43 +568,38 @@ def guest_upload_file(token):
         if upload_request["max_files"] <= len(uploaded_files):
             return "最大ファイル数に達しています", 403
 
-        # ファイルアップロード（ファイルは１件ずつしか来ないはず）
-        files = request.files.getlist("file")
-        for f in files:
-            if f.filename == "":
-                continue
+        # 元ファイルサイズ（暗号化前）
+        original_data = file.read()
+        file_size = len(original_data)
 
-            # 格納先フォルダ作成
-            upload_dir = os.path.join(UPLOAD_DIR, upload_request["id"])
-            os.makedirs(upload_dir, exist_ok=True)
+        # アップロード可能ファイルサイズチェック
+        if total_size + file_size > upload_request["max_total_size"] * 1024 * 1024:
+            return "合計ファイルサイズの上限に達しています", 403
+
+        # 格納先フォルダ作成
+        upload_dir = os.path.join(UPLOAD_DIR, upload_request["id"])
+        os.makedirs(upload_dir, exist_ok=True)
             
-            # ファイル保存
-            file_id = str(uuid.uuid4())
-            save_path = os.path.join(upload_dir, file_id)
-            f.save(save_path)
+        # 暗号化してファイル保存
+        file_id = str(uuid.uuid4())
+        save_path = os.path.join(upload_dir, file_id)
+        encrypted_data = current_app.fernet.encrypt(original_data)
+        with open(save_path, "wb") as f:
+            f.write(encrypted_data)
 
-            # アップロードしたファイルサイズ取得
-            file_size = os.path.getsize(save_path)
+        # ファイルテーブル挿入
+        db.crud.create_file(upload_request["id"], file_id, file.filename, file_size)
+        file = db.crud.get_file(file_id)
 
-            # アップロード可能ファイルサイズチェック
-            if total_size + file_size > upload_request["max_total_size"] * 1024 * 1024:
-                # ファイルを消す
-                os.remove(save_path)
-                return "合計ファイルサイズの上限に達しています", 403
-
-            # アクセスログ
-            if hasattr(g, "access_log"):
-                g.access_log.update({
-                    "file_id": file_id,
-                })
-
-            # ファイルテーブル挿入
-            db.crud.create_file(upload_request["id"], file_id, f.filename, file_size)
-            file = db.crud.get_file(file_id)
+        # アクセスログ
+        if hasattr(g, "access_log"):
+            g.access_log.update({
+                "file_id": file_id,
+            })
 
     return jsonify({
         "file_id": file_id,
-        "original_name": f.filename,
+        "original_name": file["original_name"],
         "file_size": format_filesize(file_size),
         "uploaded_at": format_datetime(file["uploaded_at"]),
     })

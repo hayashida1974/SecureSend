@@ -1,29 +1,32 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>Secure Send</title>
+  <meta charset="UTF-8">
+  <title>Secure Send</title>
 
-<!-- Bootstrap -->
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <!-- UDフォント-->>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDGothic&display=swap">
 
-<style>
-  body {
-    background-color: #f5f6f8;
-  }
-  .menu-card {
-    transition: transform .15s ease, box-shadow .15s ease;
-  }
-  .menu-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15);
-  }
-</style>
+  <style>
+    body {
+      background-color: #f4f6f8;
+      font-family: "BIZ UDGothic", sans-serif;
+    }
+    .menu-card {
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .menu-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 .5rem 1rem rgba(0,0,0,.15);
+    }
+  </style>
 </head>
 
 <body>
 
-<div class="container py-5">
+<div class="container py-3">
 
   <!-- Header -->
   <div class="d-flex justify-content-between align-items-center mb-4">
@@ -35,7 +38,7 @@
     </div>
 
     <!-- Logout -->
-    <a href="{{ url_for('logout') }}"
+    <a href="{{ url_for('internal.logout') }}"
       class="btn btn-outline-secondary d-flex align-items-center gap-2"
       aria-label="ログアウト">
       <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="3"
@@ -54,35 +57,40 @@
 
     <!-- Upload -->
     <div class="col-md-4">
-        <a href="{{ url_for('generate_upload_request') }}" class="text-decoration-none text-dark">
+      <a href="{{ url_for('internal.generate_upload_request') }}" class="text-decoration-none text-dark">
         <div class="card menu-card h-100">
-            <div class="card-body">
+          <div class="card-body">
             <div class="d-flex gap-3 align-items-start">
-                <!-- Icon -->
-                <svg width="40" height="40" fill="none" stroke="currentColor"
-                    stroke-width="2" viewBox="0 0 24 24"
-                    class="text-primary mt-1">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="17 8 12 3 7 8"/>
-                <line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
+              <!-- Icon -->
+              <svg width="40" height="40"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                viewBox="0 0 24 24"
+                class="text-primary mt-1">
+                <!-- ファイルBOX -->
+                <path d="M3 7l2-3h14l2 3v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <line x1="3" y1="7" x2="21" y2="7"/>
+              </svg>
 
-                <!-- Text -->
-                <div>
-                <h5 class="card-title mb-1">ファイルBOX作成</h5>
+              <!-- Text -->
+              <div>
+                <h5 class="card-title mb-1">ファイルボックス作成</h5>
                 <p class="card-text text-muted small mb-0">
-                    ファイルBOXを新規に作成します。
+                    ファイルボックスを新規に作成します。
                 </p>
-                </div>
+              </div>
             </div>
-            </div>
+          </div>
         </div>
-        </a>
+      </a>
     </div>
 
     <!-- Request List -->
     <div class="col-md-4">
-        <a href="{{ url_for('list_upload_requests') }}" class="text-decoration-none text-dark">
+        <a href="{{ url_for('internal.list_upload_requests') }}" class="text-decoration-none text-dark">
         <div class="card menu-card h-100">
             <div class="card-body">
             <div class="d-flex gap-3 align-items-start">
@@ -98,18 +106,55 @@
                 </svg>
 
                 <div>
-                <h5 class="card-title mb-1">ファイルBOX一覧</h5>
-                <p class="card-text text-muted small mb-0">
-                    ファイルBOXを管理します。
-                </p>
+                  <h5 class="card-title mb-1">ファイルボックス一覧</h5>
+                  <p class="card-text text-muted small mb-0">
+                      ファイルボックスを管理します。
+                  </p>
                 </div>
             </div>
             </div>
         </div>
         </a>
     </div>
+
+    <!-- Address Book -->
+    <div class="col-md-4">
+      <a href="{{ url_for('internal.address_book') }}" class="text-decoration-none text-dark">
+        <div class="card menu-card h-100">
+          <div class="card-body">
+            <div class="d-flex gap-3 align-items-start">
+
+              <svg width="40" height="40"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  viewBox="0 0 24 24"
+                  class="text-secondary mt-1">
+                <!-- カード -->
+                <rect x="3" y="5" width="18" height="14" rx="2"/>
+                <!-- 名前 -->
+                <line x1="7" y1="10" x2="14" y2="10"/>
+                <line x1="7" y1="14" x2="12" y2="14"/>
+                <!-- アイコン -->
+                <circle cx="17" cy="13" r="2"/>
+              </svg>
+              <div>
+                <h5 class="card-title mb-1">アドレス帳</h5>
+                <p class="card-text text-muted small mb-0">
+                  送信先アドレスを管理します。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </a>
+    </div>
+
   </div><!-- Menu -->
 
+  {% if session.get("admin") %}
   <!-- Admin Menu -->
   <H5>管理者メニュー</H5>
   <div class="row g-4">
@@ -147,9 +192,48 @@
           </div>
       </div>
       </a>
-  </div>
+    </div>
 
-  <!-- Access Logs -->
+    <!-- Boxes -->
+    <div class="col-md-4">
+      <a href="{{ url_for('admin.file_boxes') }}" class="text-decoration-none text-dark">
+      <div class="card menu-card h-100">
+          <div class="card-body">
+          <div class="d-flex gap-3 align-items-start">
+
+            <svg width="40" height="40"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              viewBox="0 0 24 24"
+              class="text-danger mt-1">
+            
+              <!-- ファイルBOX -->
+              <path d="M3 7l2-3h14l2 3v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <line x1="3" y1="7" x2="21" y2="7"/>
+              
+              <!-- 管理（歯車） -->
+              <circle cx="17" cy="15" r="2"/>
+              <path d="M17 11v1.2M17 17.8V19M13.8 15H12.6M21.4 15H20.2
+                      M14.6 12.6l-.8-.8M19.2 17.2l-.8-.8
+                      M14.6 17.4l-.8.8M19.2 12.8l-.8.8"/>
+            </svg>
+                          
+            <div>
+              <h5 class="card-title mb-1">ファイルボックス管理</h5>
+              <p class="card-text text-muted small mb-0">
+                ファイルボックスをメンテナンスします。
+              </p>
+              </div>
+          </div>
+          </div>
+      </div>
+      </a>
+    </div>
+  
+    <!-- Access Logs -->
     <div class="col-md-4">
         <a href="{{ url_for('admin.access_logs') }}" class="text-decoration-none text-dark">
         <div class="card menu-card h-100">
@@ -237,6 +321,8 @@
     </div>
 
   </div>
+  {% endif %}
+  
 </div>
 
 </body>

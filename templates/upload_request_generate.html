@@ -1,23 +1,26 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>Secure Send</title>
+  <meta charset="UTF-8">
+  <title>Secure Send</title>
 
-<!-- Bootstrap -->
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- UDフォント-->>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDGothic&display=swap">
 
-<style>
-  body {
-    background-color: #f5f6f8;
-  }
-</style>
+  <style>
+    body {
+      background-color: #f5f6f8;
+      font-family: "BIZ UDGothic", sans-serif;
+    }
+  </style>
 
 </head>
 <body>
 
-<div class="container py-5">
+<div class="container py-3">
 
   <!-- Header -->
   <div class="d-flex justify-content-between align-items-center mb-4">
@@ -31,7 +34,7 @@
     <div class="d-flex gap-2">
       
       <!-- Back button -->
-      <a href="{{ url_for('menu') }}"
+      <a href="{{ url_for('internal.menu') }}"
         class="btn btn-outline-secondary d-flex align-items-center"
         aria-label="メニューに戻る">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -63,7 +66,7 @@
       <div class="d-flex flex-column gap-2">
 
         <!-- ログアウトボタン -->
-        <form method="get" action="{{ url_for('logout') }}">
+        <form method="get" action="{{ url_for('internal.logout') }}">
           <button type="submit" class="btn btn-outline-danger w-100 text-start">
             ログアウト
           </button>
@@ -79,9 +82,9 @@
     <div class="card-body p-4">
 
       <!-- Title -->
-      <h1 class="h5 mb-4 text-center fw-semibold">
-        ファイルBOX作成
-      </h1>
+      <h5 class="card-title text-center mb-4 fw-bold">
+        ファイルボックス作成
+      </h5>
 
       <!-- Form -->
       <form method="post" id="issueForm">
@@ -90,9 +93,7 @@
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
         <div class="mb-3">
-          <label for="title" class="form-label small">
-            BOX名
-          </label>
+          <label for="title" class="form-label">ボックス名</label>
           <input
             type="text"
             id="title"
@@ -103,9 +104,7 @@
         </div>
 
         <div class="mb-3">
-          <label for="expires_at" class="form-label small">
-            有効期限
-          </label>
+          <label for="expires_at" class="form-label">有効期限</label>
           <input
             type="date"
             id="expires_at"
@@ -117,9 +116,7 @@
 
         <div class="row mb-4">
           <div class="col-md-6">
-            <label for="max_files" class="form-label small">
-              格納できるファイル数（最大）
-            </label>
+            <label for="max_files" class="form-label">格納できるファイル数（最大）</label>
             <input
               type="number"
               id="max_files"
@@ -132,9 +129,7 @@
           </div>
 
           <div class="col-md-6">
-            <label for="max_total_size" class="form-label small">
-              格納できるファイル合計サイズ（MB）
-            </label>
+            <label for="max_total_size" class="form-label">格納できるファイル合計サイズ（MB）</label>
             <input
               type="number"
               id="max_total_size"
@@ -148,9 +143,9 @@
         </div>
 
         <button type="button"
-                class="btn btn-primary w-100"
+                class="btn btn-outline-primary w-100"
                 id="openConfirm">
-          ファイルBOXを作成する
+          作成
         </button>
       </form>
 
@@ -165,18 +160,18 @@
     <div class="modal-content">
 
       <div class="modal-header">
-        <h5 class="modal-title">設定内容の確認</h5>
+        <h5 class="modal-title">ファイルボックス作成の確認</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
 
       <div class="modal-body">
         <p class="small text-muted mb-3">
-          以下の内容でアップロードBOXを作成します。よろしいですか？
+          以下の内容でファイルボックスを作成します。よろしいですか？
         </p>
 
-        <ul class="list-group list-group-flush small">
+        <ul class="list-group list-group-flush">
           <li class="list-group-item">
-            件名：<strong id="confirm-title"></strong>
+            ボックス名：<strong id="confirm-title"></strong>
           </li>
           <li class="list-group-item">
             有効期限：<strong id="confirm-expires"></strong>
@@ -185,7 +180,7 @@
             最大ファイル数：<strong id="confirm-max-files"></strong>
           </li>
           <li class="list-group-item">
-            合計サイズ：<strong id="confirm-max-size"></strong> MB
+            合計ファイルサイズ：<strong id="confirm-max-size"></strong><strong> MB</strong>
           </li>
         </ul>
       </div>
@@ -199,7 +194,7 @@
         <button type="button"
                 class="btn btn-primary"
                 id="confirmSubmit">
-          OK（発行する）
+          OK
         </button>
       </div>
 

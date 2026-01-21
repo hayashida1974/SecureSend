@@ -15,6 +15,9 @@
   .log-table {
     font-size: 0.85rem;
   }
+  .log-table td{
+    padding: 4px 8px 4px 8px;
+  }
   .truncate {
     max-width: 200px;
     white-space: nowrap;
@@ -48,7 +51,7 @@
             </button>
 
             <!-- Back button -->
-            <a href="{{ url_for('menu') }}"
+            <a href="{{ url_for('internal.menu') }}"
                 class="btn btn-outline-secondary"
                 aria-label="メニューに戻る">
                 <svg width="20" height="20"

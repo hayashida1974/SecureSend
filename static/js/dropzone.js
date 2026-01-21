@@ -9,7 +9,7 @@ document.head.appendChild(style);
 
 Dropzone.options.dz = {
   autoProcessQueue: false,   // 自動アップロードしない
-  parallelUploads: 10,        // 同時アップロード数
+  parallelUploads: 10,       // 同時アップロード数
   maxFilesize: 10,           // ファイルサイズ
   dictDefaultMessage: "",
   acceptedFiles: "",
@@ -48,7 +48,7 @@ Dropzone.options.dz = {
         </div>
 
         <!-- エラー -->
-        <div class="dz-error-message text-danger small mt-2"
+        <div class="dz-error-message small position-absolute mt-2 top-100 start-50 translate-middle-x"
             data-dz-errormessage>
         </div>
 

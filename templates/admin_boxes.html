@@ -110,15 +110,15 @@
     </nav>
 
     <!-- リスト -->
-    <div class="table-responsive border rounded">
+    <div class="card shadow-sm p-1">
       <table class="table table-hover table-striped align-middle mb-0">
-        <thead class="table-light">
+        <thead class="table-light small text-muted">
           <tr>
             <th>ボックス名</th>
             <th style="width: 120px">有効期限</th>
-            <th style="width: 80px" class="text-center">状態</th>
-            <th style="width: 120px" class="text-center">アップロード<br/>ファイル数</th>
-            <th style="width: 120px" class="text-center">ダウンロード<br/>URL発行数</th>
+            <th style="width: 100px">状態</th>
+            <th style="width: 110px">アップロード<br/>ファイル数</th>
+            <th style="width: 110px">ダウンロード<br/>URL発行数</th>
             <th style="width: 150px">作成日時</th>
           </tr>
         </thead>
@@ -126,22 +126,32 @@
         {% for req in upload_requests %}
           <tr class="clickable-row"
               data-href="{{ url_for('internal.detail_upload_request', upload_id=req.id) }}">
-            <td class="fw-medium">{{ req.title or '（未設定）' }}</td>
-            <td>{{ req.expires_at }}</td>
-            <td class="text-center">
+            <td class="fw-medium">
+              {{ req.title or '（未設定）' }}
+            </td>
+            <td>
+              {{ req.expires_at }}
+            </td>
+            <td>
               {% if req.is_expired == 1 %}
                 <span class="badge bg-danger">
                   期限切れ
                 </span>
               {% else %}
                 <span class="badge bg-success">
-                  有　　効
+                  有効
                 </span>
               {% endif %}
             </td>
-            <td class="text-center">{{ req.file_count }}</td>
-            <td class="text-center">{{ req.download_url_count }}</td>
-            <td>{{ req.created_at| datetime }}</td>
+            <td>
+              {{ req.file_count }}
+            </td>
+            <td>
+              {{ req.download_url_count }}
+            </td>
+            <td>
+              {{ req.created_at| datetime }}
+            </td>
           </tr>
         {% endfor %}
         </tbody>

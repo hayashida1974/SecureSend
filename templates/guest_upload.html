@@ -5,20 +5,23 @@
   <title>Secure Send</title>
 
   <!-- Bootstrap CDN -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-    rel="stylesheet">
-  <!-- Dropzone -->
-  <link
-    href="https://unpkg.com/dropzone@5/dist/min/dropzone.min.css"
-    rel="stylesheet">
-  <script src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- UDフォント-->>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDGothic&display=swap">
 
+  <!-- Dropzone -->
+  <link rel="stylesheet" href="https://unpkg.com/dropzone@5/dist/min/dropzone.min.css">
+  <script src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js"></script>
   <script src="{{ url_for('static', filename='js/dropzone.js') }}"></script>
+
+  <!-- Vue -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 
   <style>
     body {
       background-color: #f4f6f8;
+      font-family: "BIZ UDGothic", sans-serif;
     }
     /* Dropzone */
     .dz-wrapper {
@@ -27,38 +30,35 @@
     #dz {
       position: relative;
       min-height: 120px;
-
-      border: 2px dashed #0d6efd;      /* 点線枠 */
+      border: 2px dashed #0d6efd;
       border-radius: .75rem;
-
-      background-color: #f0f6ff;       /* うすい青 */
-
+      background-color: #f0f6ff;
       display: flex;
-      flex-wrap: wrap;      /* 折り返し */
+      flex-wrap: wrap;
       align-items: flex-start;
-      gap: 12px;            /* ← ファイル同士の隙間 */
-      padding: 12px;  
+      gap: 12px;
+      padding: 12px;
     }
-    #dz-upload {  /* アップロードボタン：常に右上 */
+    #dz-upload {
       position: absolute;
       top: 12px;
       right: 12px;
       z-index: 10;
     }
-    #dz-placeholder { /* プレースホルダー：中央寄せ */
+    #dz-placeholder {
       position: absolute;
       inset: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      pointer-events: none; /* ドロップ操作を邪魔しない */
+      pointer-events: none;
     }
   </style>
 </head>
 <body>
 
-<div class="container py-4 w-50">
+<div class="container py-2 w-50">
 
   <!-- Header -->
   <div class="d-flex justify-content-between align-items-center mb-4">
@@ -82,87 +82,167 @@
           <p class="text-muted small mb-0">
             有効期限：{{ upload_request.expires_at }}
           </p>
+          <p class="text-muted small mb-0">
+            格納できるファイル数：{{ upload_request.max_files }}
+          </p>
+          <p class="text-muted small mb-0">
+            格納できるファイル合計サイズ：{{ upload_request.max_total_size }} MB
+          </p>
         </div>
 
         <!-- Dropzone -->
-        <div class="dz-wrapper">
-        <form
-          action="{{ url_for('guest.guest_upload_file', token=upload_request.upload_token) }}"
-          method="post"
-          class="dropzone rounded-4 text-center"
-          id="dz">
+        <p class="mb-0">ファイルを選択（またはドラッグ＆ドロップ）し、「アップロード」ボタンを押すとアップロードが実行されます。</p>
+        <p class="small text-danger mb-2">⚠️同じファイル名でアップロードした場合、既存のファイルは新しい内容で上書きされます。</p>
+        <div class="dz-wrapper mb-4">
+          <form
+            action="{{ url_for('guest.guest_upload_file', token=upload_request.upload_token) }}"
+            method="post"
+            class="dropzone rounded-4 text-center"
+            id="dz">
 
-          <!-- CSRFトークン -->
-          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <!-- CSRFトークン -->
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
-          <div id="dz-placeholder">
-            <div class="mb-2">
-              <svg
-                width="40"
-                height="40"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                class="text-primary"
-                viewBox="0 0 24 24">
-                <path d="M12 16V4"></path>
-                <path d="M8 8l4-4 4 4"></path>
-                <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
-              </svg>
+            <div id="dz-placeholder">
+              <div class="mb-2">
+                <svg
+                  width="40"
+                  height="40"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  class="text-primary"
+                  viewBox="0 0 24 24">
+                  <path d="M12 16V4"></path>
+                  <path d="M8 8l4-4 4 4"></path>
+                  <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
+                </svg>
+              </div>
+
+              <p class="fw-semibold text-primary mb-1">
+                ファイルをここにドラッグ＆ドロップ
+              </p>
+
+              <p class="small text-muted mb-0">
+                またはクリックしてファイルを選択
+              </p>
             </div>
-
-            <p class="fw-semibold text-primary mb-1">
-              ファイルをここにドラッグ＆ドロップ
-            </p>
-
-            <p class="small text-muted mb-0">
-              またはクリックしてファイルを選択
-            </p>
-          </div>
-        </form>
-        <button
-          id="dz-upload"
-          class="btn btn-outline-primary float-end">
-          アップロード
-        </button>
+          </form>
+          <button
+            id="dz-upload"
+            class="btn btn-outline-primary float-end">
+            アップロード
+          </button>
+          <p class="small m-0">※1ファイルあたり最大10MBまでアップロードできます。</p>
         </div><!-- Dropzone -->
 
-        📄 アップロード済みファイル
-        {% if files %}
-          <div class="table-responsive">
-            <table class="table align-middle">
-              <thead class="table-light">
-                <tr>
-                  <th>ファイル名</th>
-                  <th style="width: 120px;">サイズ</th>
-                </tr>
+        <!-- File list -->
+        {% raw %}
+        <div id="filesApp">
+          <div v-if="files.length">
+            <h1 class="h5 fw-bold mb-2 text-center">
+              アップロード済みファイル
+            </h1>
+            <div class="table-responsive border rounded">
+              <table class="table table-striped align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>ファイル名</th>
+                    <th style="width: 100px">サイズ</th>
+                  </tr>
                 </thead>
                 <tbody>
-                {% for f in files %}
-                <tr>
-                  <td>
-                    <div class="fw-semibold">
-                        {{ f.original_name }}
-                    </div>
-                  </td>
-                  <td>
-                    <div class="fw-semibold">
-                        {{ f.file_size | filesize }}
-                    </div>
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+                    <tr v-for="file in files" :key="file.file_id">
+                      <td class="text-truncate">
+                        {{ file.original_name }}
+                      </td>
+                      <td>{{ file.file_size }}</td>
+                    </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-
-        {% else %}
-        {% endif %}
-
+        </div>
+        {% endraw %}<!-- File list -->
       </div>
     </div>
   </div>
 </div>
+
+  <!-- Toast コンテナ（画面上中央） -->
+  <div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3">
+
+    <div id="messageToast"
+        class="toast align-items-center text-bg-success border-0"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true">
+
+      <div class="d-flex">
+        <div class="toast-body" id="messageToastBody">
+          メッセージ
+        </div>
+        <button type="button"
+                class="btn-close btn-close-white me-2 m-auto"
+                data-bs-dismiss="toast"
+                aria-label="Close">
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let messageToast;
+    document.addEventListener("DOMContentLoaded", function () {
+      const toastEl = document.getElementById("messageToast");
+      messageToast = new bootstrap.Toast(toastEl, {
+        delay: 2000  // 表示時間（ms）
+      });
+    });
+
+    // Toast表示
+    function showMessageToast(message) {
+      const body = document.getElementById("messageToastBody");
+      if (body) {
+        body.textContent = message;
+      }
+      if (messageToast) {
+        messageToast.show();
+      }
+    }
+  </script>
+
+  <!-- アップロードファイルリスト Vue化 -->
+  <script>
+    const filesData = {{ files_json | safe }};
+
+    window.filesApp = Vue.createApp({
+      data() {
+        return {
+          files: filesData,
+          targetFile: null,
+          deleteModal: null
+        };
+      },
+      methods: {
+        addFile(file) {
+          const index = this.files.findIndex(
+            f => f.original_name === file.original_name
+          );
+      
+          if (index !== -1) {
+            // 既存ファイルを上書き
+            this.files.splice(index, 1, file);
+            showMessageToast(file.original_name + " ファイルを上書きしました");
+          } else {
+            // 新規追加
+            this.files.push(file);
+          }
+        },
+      }
+    }).mount("#filesApp");
+  </script>
 
 </body>
 </html>

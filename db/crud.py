@@ -17,7 +17,7 @@ def list_users():
 # ------------------------
 # ログインユーザ情報保存
 # ------------------------
-def save_login_user(login_id, name, mail, external='', admin_flag=0, disabled_flag=0, password=None):
+def save_login_user(login_id, name, mail, external='', admin_flag=None, disabled_flag=None, password=None):
 
     db = get_db()
     cur = db.cursor()
@@ -32,12 +32,26 @@ def save_login_user(login_id, name, mail, external='', admin_flag=0, disabled_fl
 
     if row is None:
         # 存在しなければINSERT
+        if admin_flag is None:
+            admin_flag = 0
+        if disabled_flag is None:
+            disabled_flag = 0
+
         cur.execute("""
             INSERT INTO users (login_id, password, name, mail, external, admin_flag, disabled_flag)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (login_id, password, name, mail, external, admin_flag, disabled_flag))
     else:
         # 存在すればUPDATE
+        if name is None:
+            name = row["name"]
+        if mail is None:
+            mail = row["mail"]
+        if admin_flag is None:
+            admin_flag = row["admin_flag"]
+        if disabled_flag is None:
+            disabled_flag = row["disabled_flag"]
+
         fields = ["name = ?", "mail = ?", "admin_flag = ?", "disabled_flag = ?"]
         params = [name, mail, admin_flag, disabled_flag]
 
@@ -68,10 +82,30 @@ def confirm_password(login_id, password):
     if row is None:
         return False
 
-    hashed_password = row
+    hashed_password = row[0]
 
     # パスワード検証
     return check_password_hash(hashed_password, password)
+
+# ------------------------
+# 管理者ユーザチェック
+# ------------------------
+def is_admin_user(login_id):
+    db = get_db()
+
+    # ユーザー取得
+    cur = db.execute(
+        "SELECT admin_flag FROM users WHERE login_id = ? and disabled_flag = 0",
+        (login_id,)
+    )
+    row  = cur.fetchone()
+    if row is None:
+        return False
+
+    admin_flag = row[0]
+
+    # パスワード検証
+    return bool(admin_flag)
 
 # ------------------------
 # ユーザ削除
@@ -166,43 +200,59 @@ def get_upload_request_by_token(token):
     return cur.fetchone()
 
 # ------------------------
-# アップロード依頼リスト取得（検索Key：ユーザID）
+# アップロード依頼リスト取得
 # ------------------------
-def list_upload_requests(user_id):
+def list_upload_requests(per_page=None, offset=0, user_id=None):
     db = get_db()
-    cur = db.execute("""
+    cur = db.cursor()
+
+    where = []
+    where_params = []
+
+    if user_id:
+        where.append("ur.created_by = ?")
+        where_params.append(user_id)
+
+    where_sql = " WHERE " + " AND ".join(where) if where else ""
+
+    # --- 件数取得 ---
+    count_sql = f"""
+        SELECT COUNT(DISTINCT ur.id)
+        FROM upload_requests ur
+        {where_sql}
+    """
+    cur.execute(count_sql, where_params)
+    total = cur.fetchone()[0]
+
+    # --- データ取得 ---
+    select_params = list(where_params)
+    sql = f"""
         SELECT
             ur.*,
-
-            -- 期限切れ判定(1=期限切れ, 0=有効）
             CASE
                 WHEN ur.expires_at IS NOT NULL
                  AND date(ur.expires_at) < date('now')
                 THEN 1
                 ELSE 0
             END AS is_expired,
-
-            -- アップロード済ファイル数
-            (
-                SELECT COUNT(*)
-                FROM files f
-                WHERE f.upload_request_id = ur.id
-            ) AS file_count,
-
-            -- ダウンロードURL発行数
-            (
-                SELECT COUNT(*)
-                FROM download_requests dt
-                WHERE dt.upload_request_id = ur.id
-            ) AS download_url_count
-
+            COUNT(DISTINCT f.id) AS file_count,
+            COUNT(DISTINCT dt.id) AS download_url_count
         FROM upload_requests ur
-        WHERE ur.created_by = ?
+        LEFT JOIN files f
+            ON f.upload_request_id = ur.id
+        LEFT JOIN download_requests dt
+            ON dt.upload_request_id = ur.id
+        {where_sql}
+        GROUP BY ur.id
         ORDER BY ur.created_at DESC
-    """, (
-        user_id,
-    ))
-    return cur.fetchall()
+    """
+
+    if per_page:
+        sql += " LIMIT ? OFFSET ?"
+        select_params.extend([per_page, offset])
+
+    cur.execute(sql, select_params)
+    return cur.fetchall(), total
 
 # ------------------------
 # アップロード依頼削除

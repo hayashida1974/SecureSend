@@ -5,19 +5,20 @@
   <title>Secure Send</title>
 
   <!-- Bootstrap CDN -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-    rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <!-- UDフォント-->>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDGothic&display=swap">
 
   <style>
     body {
       background-color: #f4f6f8;
+      font-family: "BIZ UDGothic", sans-serif;
     }
   </style>
 </head>
 <body>
 
-<div class="container py-4 w-50">
+<div class="container py-2 w-50">
     
   <!-- Header -->
   <div class="d-flex justify-content-between align-items-center mb-4">
@@ -46,8 +47,13 @@
         </div>
 
         {% if files %}
-          <div class="table-responsive">
-            <table class="table align-middle">
+          <!-- ダウンロード説明 -->
+          <p class="mb-3">
+            個別にダウンロードする場合は、各ファイルの右端のアイコンをクリックしてください。<br>
+            まとめてダウンロードする場合は、「ZIPで一括ダウンロード」ボタンをクリックしてください。
+          </p>
+          <div class="table-responsive border rounded">
+            <table class="table table-striped align-middle mb-0">
               <thead class="table-light">
                 <tr>
                   <th>ファイル名</th>
@@ -59,14 +65,10 @@
                 {% for f in files %}
                 <tr>
                   <td>
-                    <div class="fw-semibold">
-                        {{ f.original_name }}
-                    </div>
+                    <div>{{ f.original_name }}</div>
                   </td>
                   <td>
-                    <div class="fw-semibold">
-                        {{ f.file_size | filesize }}
-                    </div>
+                    <div>{{ f.file_size | filesize }}</div>
                   </td>
                   <td class="text-end">
                     <a
@@ -93,7 +95,7 @@
             </table>
           </div>
 
-          <div class="d-flex justify-content-end mb-3">
+          <div class="d-flex justify-content-end my-3">
             <a
               href="{{ url_for('guest.guest_download_zip', token=download_request.download_token) }}"
               class="btn btn-primary btn-sm">
