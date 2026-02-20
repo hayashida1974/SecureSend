@@ -18,152 +18,160 @@
     .clickable-row {
       cursor: pointer;
     }
-    .clickable-row:hover {
-      background-color: #08f9fa;
+    .clickable-row:hover > * {
+      background-color: #d4f8ed;
     }
   </style>
 </head>
 
 <body>
 
-<div class="container py-3">
+  <div class="container py-2">
 
-  <!-- Header -->
-  <div class="d-flex justify-content-between align-items-center">
-    <div>
-      <img
-        src="{{ url_for('static', filename='img/app_logo.png') }}"
-        alt="Secure Send"
-        height="100">
-    </div>
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <div>
+        <img
+          src="{{ url_for('static', filename='img/app_logo.png') }}"
+          alt="Secure Send"
+          height="100">
+      </div>
 
-    <div class="d-flex gap-2">
-      
-      <!-- Back button -->
-      <a href="{{ url_for('internal.menu') }}"
-        class="btn btn-outline-secondary d-flex align-items-center"
-        aria-label="メニューに戻る">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-        <span class="ms-1">戻る</span>
-      </a>
+      <div class="d-flex gap-2">
+        
+        <!-- Back button -->
+        <a href="{{ url_for('internal.menu') }}"
+          class="btn btn-outline-secondary d-flex align-items-center"
+          aria-label="メニューに戻る">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          <span class="ms-1">戻る</span>
+        </a>
 
-      <!-- Side Menu button -->
-      <button class="btn btn-outline-secondary" data-bs-toggle="offcanvas" data-bs-target="#sideMenu" aria-label="メニュー">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="4" y1="7" x2="20" y2="7"/>
-          <line x1="4" y1="12" x2="20" y2="12"/>
-          <line x1="4" y1="17" x2="20" y2="17"/>
-        </svg>
-      </button>
-
-    </div>
-  </div><!-- Header -->
-
-  <!-- Side Menu -->
-  <div class="offcanvas offcanvas-end" tabindex="-1" id="sideMenu">
-    <div class="offcanvas-header">
-      <h5 class="offcanvas-title">Secure Send</h5>
-      <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-    </div>
-
-    <div class="offcanvas-body">
-      <div class="d-flex flex-column gap-2">
-
-        <!-- ログアウトボタン -->
-        <form method="get" action="{{ url_for('internal.logout') }}">
-          <button type="submit" class="btn btn-outline-danger w-100 text-start">
-            ログアウト
-          </button>
-        </form>
+        <!-- Side Menu button -->
+        <button class="btn btn-outline-secondary" data-bs-toggle="offcanvas" data-bs-target="#sideMenu" aria-label="メニュー">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="7" x2="20" y2="7"/>
+            <line x1="4" y1="12" x2="20" y2="12"/>
+            <line x1="4" y1="17" x2="20" y2="17"/>
+          </svg>
+        </button>
 
       </div>
-    </div>
-  </div><!-- Side Menu -->
+    </div><!-- Header -->
 
-  <!-- List Card -->
-  {% if upload_requests %}
+    <!-- Side Menu -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="sideMenu">
+      <div class="offcanvas-header">
+        <h5 class="offcanvas-title">{{ session.get("user_name") }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+      </div>
 
-    <!-- ページネーション -->
-    <nav>
-      <ul class="pagination justify-content-center">
+      <div class="offcanvas-body">
+        <div class="d-flex flex-column gap-2">
 
-          <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-              <a class="page-link"
-                  href="?page={{ page - 1 }}&per_page={{ per_page }}">前へ</a>
-          </li>
+          <!-- ログアウトボタン -->
+          <form method="get" action="{{ url_for('internal.logout') }}">
+            <button type="submit" class="btn btn-outline-danger w-100 text-start">
+              ログアウト
+            </button>
+          </form>
 
-          {% for p in range(1, total_pages + 1) %}
-              <li class="page-item {% if p == page %}active{% endif %}">
-                  <a class="page-link"
-                      href="?page={{ p }}&per_page={{ per_page }}">{{ p }}</a>
-              </li>
-          {% endfor %}
+        </div>
+      </div>
+    </div><!-- Side Menu -->
 
-          <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-              <a class="page-link"
-                  href="?page={{ page + 1 }}&per_page={{ per_page }}">次へ</a>
-          </li>
+    <div class="card shadow-sm mb-4">
+      <div class="card-body p-4">
+        <!-- Title -->
+        <h5 class="card-title mb-2 fw-bold">
+          ファイルボックス一覧
+        </h5>
 
-      </ul>
-    </nav>
+        <!-- List Card -->
+        {% if upload_requests %}
+          <!-- ページネーション -->
+          <nav>
+            <ul class="pagination justify-content-center">
 
-    <!-- リスト -->
-    <div class="table-responsive border rounded">
-      <table class="table table-hover table-striped align-middle mb-0">
-        <thead class="table-light">
-          <tr>
-            <th>ボックス名</th>
-            <th style="width: 120px">有効期限</th>
-            <th style="width: 80px" class="text-center">状態</th>
-            <th style="width: 120px" class="text-center">アップロード<br/>ファイル数</th>
-            <th style="width: 120px" class="text-center">ダウンロード<br/>URL発行数</th>
-            <th style="width: 150px">作成日時</th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for req in upload_requests %}
-          <tr class="clickable-row"
-              data-href="{{ url_for('internal.detail_upload_request', upload_id=req.id) }}">
-            <td class="fw-medium">{{ req.title or '（未設定）' }}</td>
-            <td>{{ req.expires_at }}</td>
-            <td class="text-center">
-              {% if req.is_expired == 1 %}
-                <span class="badge bg-danger">
-                  期限切れ
-                </span>
-              {% else %}
-                <span class="badge bg-success">
-                  有　　効
-                </span>
-              {% endif %}
-            </td>
-            <td class="text-center">{{ req.file_count }}</td>
-            <td class="text-center">{{ req.download_url_count }}</td>
-            <td>{{ req.created_at| datetime }}</td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  {% else %}
-    <div class="card shadow-sm">
-      <div class="text-center text-muted py-5">
-        ファイルBOXはまだありません。
+                <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                    <a class="page-link"
+                        href="?page={{ page - 1 }}&per_page={{ per_page }}">前へ</a>
+                </li>
+
+                {% for p in range(1, total_pages + 1) %}
+                    <li class="page-item {% if p == page %}active{% endif %}">
+                        <a class="page-link"
+                            href="?page={{ p }}&per_page={{ per_page }}">{{ p }}</a>
+                    </li>
+                {% endfor %}
+
+                <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                    <a class="page-link"
+                        href="?page={{ page + 1 }}&per_page={{ per_page }}">次へ</a>
+                </li>
+
+            </ul>
+          </nav>
+
+          <!-- リスト -->
+          <div class="table-responsive border rounded">
+            <table class="table table-hover table-striped align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>ボックス名</th>
+                  <th style="width: 120px">有効期限</th>
+                  <th style="width: 80px" class="text-center">状態</th>
+                  <th style="width: 120px" class="text-center">アップロード<br/>ファイル数</th>
+                  <th style="width: 120px" class="text-center">ダウンロード<br/>URL発行数</th>
+                  <th style="width: 150px">作成日時</th>
+                </tr>
+              </thead>
+              <tbody>
+              {% for req in upload_requests %}
+                <tr class="clickable-row"
+                    data-href="{{ url_for('internal.detail_upload_request', upload_id=req.id) }}">
+                  <td class="fw-medium">{{ req.title or '（未設定）' }}</td>
+                  <td>{{ req.expires_at }}</td>
+                  <td class="text-center">
+                    {% if req.is_expired == 1 %}
+                      <span class="badge bg-danger">
+                        期限切れ
+                      </span>
+                    {% else %}
+                      <span class="badge bg-success">
+                        有　　効
+                      </span>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">{{ req.file_count }}</td>
+                  <td class="text-center">{{ req.download_url_count }}</td>
+                  <td>{{ req.created_at| datetime }}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="card shadow-sm">
+            <div class="text-center text-muted py-5">
+              ファイルボックスはまだありません。
+            </div>
+          </div>
+        {% endif %}<!-- List Card -->
       </div>
     </div>
-  {% endif %}
 
-</div>
+  </div>
 
-<script>
-  document.querySelectorAll(".clickable-row").forEach(row => {
-    row.addEventListener("click", () => {
-      window.location = row.dataset.href;
+  <script>
+    document.querySelectorAll(".clickable-row").forEach(row => {
+      row.addEventListener("click", () => {
+        window.location = row.dataset.href;
+      });
     });
-  });
-</script>
+  </script>
 
 </body>
 </html>

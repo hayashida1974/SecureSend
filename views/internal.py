@@ -63,8 +63,13 @@ def login():
         password = request.form.get("password")
 
         if db.crud.confirm_password(username, password) or authenticate_with_gs(username, password):
+            # ユーザ情報取得
+            user = db.crud.get_user(username)
+
+            # セッションにユーザ情報格納
             session.permanent = True
-            session["user_id"] = username
+            session["user_id"] = user["login_id"]
+            session["user_name"] = user["name"]
             session["admin"] = db.crud.is_admin_user(username)
 
             # アクセスログ

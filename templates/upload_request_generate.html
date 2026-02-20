@@ -58,7 +58,7 @@
   <!-- Side Menu -->
   <div class="offcanvas offcanvas-end" tabindex="-1" id="sideMenu">
     <div class="offcanvas-header">
-      <h5 class="offcanvas-title">Secure Send</h5>
+      <h5 class="offcanvas-title">{{ session.get("user_name") }}</h5>
       <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
     </div>
 
@@ -93,7 +93,7 @@
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
         <div class="mb-3">
-          <label for="title" class="form-label">ボックス名</label>
+          <label for="title" class="form-label">ボックス名<small class="text-muted"> ※受信者のアップロード・ダウンロード画面に表示されます</small></label>
           <input
             type="text"
             id="title"

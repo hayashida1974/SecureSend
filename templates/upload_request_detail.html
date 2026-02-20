@@ -79,6 +79,9 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .clickable-row:hover > * {
+      background-color: #d4f8ed;
+    }
   </style>
 </head>
 
@@ -121,7 +124,7 @@
     <!-- Side Menu -->
     <div class="offcanvas offcanvas-end" tabindex="-1" id="sideMenu">
       <div class="offcanvas-header">
-        <h5 class="offcanvas-title">Secure Send</h5>
+        <h5 class="offcanvas-title">{{ session.get("user_name") }}</h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
       </div>
 
@@ -141,13 +144,12 @@
 
     <!-- Upload URL 情報 -->
     <div class="card shadow-sm mb-4">
-      <div class="card-body">
+      <div class="card-body p-4">
 
-        <div class="mb-3">
-          <h1 class="h5 mb-1 fw-semibold">
-            {{ upload_request.title }}
-          </h1>
-        </div>
+        <!-- Title -->
+        <h5 class="card-title mb-4 fw-bold">
+          {{ upload_request.title }}
+        </h5>
 
         <div class="mb-3">
           <div class="input-group">
@@ -358,9 +360,9 @@
 
         {% raw %}
         <div id="downloadUrlsApp">
-          <!-- Download Url list -->
+          <!-- ダウンロードURLリスト -->
           <div v-if="downloadUrls.length" class="table-responsive border rounded mb-3">
-            <table class="table table-striped align-middle mb-0">
+            <table class="table table-hover table-striped align-middle mb-0">
               <thead class="table-light">
                   <tr>
                       <th style="width: 500px">ダウンロードURL</th>
@@ -374,14 +376,18 @@
                   </tr>
               </thead>
               <tbody>
-                <tr v-for="downloadUrl in downloadUrls" :key="downloadUrl.id">
+                <tr 
+                  v-for="downloadUrl in downloadUrls"
+                  :key="downloadUrl.id"
+                  class="clickable-row"
+                  @click="openDetailModal(downloadUrl)">
                   <td class="truncate">{{ urlRoot + 'download/' + downloadUrl.download_token }}</td>
                   <td>
                     <div class="d-inline-flex align-items-center gap-2">
                       <!-- コピーアイコン -->
                       <button
                         class="btn p-0 text-secondary"
-                        @click="copyUrl(downloadUrl)"
+                        @click.stop="copyUrl(downloadUrl)"
                         title="URLをコピー"
                       >
                         <svg
@@ -398,7 +404,7 @@
 
                       <button
                         class="btn p-0 text-secondary"
-                        @click="copyMailText(downloadUrl)"
+                        @click.stop="copyMailText(downloadUrl)"
                         title="メール用メッセージをコピー"
                       >
                         <svg
@@ -430,7 +436,7 @@
                     <div class="d-inline-flex align-items-center gap-2">
                       <!-- ゴミ箱アイコン -->
                       <button class="btn p-0 text-danger"
-                              @click="openDeleteModal(downloadUrl)"
+                              @click.stop="openDeleteModal(downloadUrl)"
                               title="URLを削除"
                       >
                         <svg
@@ -452,30 +458,7 @@
                 </tr>
               </tbody>
             </table>
-          </div>
-
-          <!-- 削除確認ダイアログ -->
-          <div class="modal fade" id="confirmDownloadUrlDeleteModal" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered">
-              <div class="modal-content">
-                <div class="modal-header">
-                  <h5 class="modal-title">削除確認</h5>
-                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                  ダウンロードURLを削除しますか？
-                </div>
-                <div class="modal-footer">
-                  <button class="btn btn-secondary" data-bs-dismiss="modal">
-                    キャンセル
-                  </button>
-                  <button class="btn btn-danger" @click="confirmDelete">
-                    削除
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div><!-- Download Url list -->
+          </div><!-- ダウンロードURLリスト -->
 
           <!-- ダウンロードURL発行 -->
           <form class="px-3 py-2 border rounded shadow-sm" id="issueForm">
@@ -504,9 +487,9 @@
                 </select>
               </div>
               
-              <!-- ダウンロード回数 -->
+              <!-- ダウンロード回数制限 -->
               <div class="col-md-4">
-                <label class="form-label">ダウンロード回数</label>
+                <label class="form-label">ダウンロード回数制限</label>
                 <input
                   type="number"
                   class="form-control"
@@ -578,8 +561,93 @@
 
             </div><!-- ２行目 -->
           </form><!-- ダウンロードURL発行 -->
-        </div><!-- downloadUrlsApp -->
-        {% endraw %}
+
+          <!-- ダウンロードURL詳細ダイアログ -->
+          <div class="modal fade" id="dlurlDetailModal" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+              <div class="modal-content">
+
+                <div class="modal-header">
+                  <h5 class="modal-title">ダウンロードURL詳細</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body" v-if="target">
+                  <dl class="row mb-0">
+                    <dt class="col-sm-3 text-end p-0">ダウンロードURL：</dt>
+                    <dd class="col-sm-9 text-break">
+                      {{ urlRoot + 'download/' + target.download_token }}
+                    </dd>
+
+                    <dt class="col-sm-3 text-end p-0">有効期限：</dt>
+                    <dd class="col-sm-9">{{ target.expires_at || '-' }}</dd>
+
+                    <dt class="col-sm-3 text-end p-0">有効日数：</dt>
+                    <dd class="col-sm-9">{{ target.expire_days }} 日</dd>
+
+                    <dt class="col-sm-3 text-end p-0">ダウンロード回数制限：</dt>
+                    <dd class="col-sm-9">{{ target.max_downloads }} 回</dd>
+
+                    <dt class="col-sm-3 text-end p-0">アクセス方法：</dt>
+                    <dd class="col-sm-9">
+                      {{ authTypeLabel[target.auth_type] }}
+                    </dd>
+
+                    <dt v-if="target.auth_type == 'mail' || target.auth_type == 'pass'" class="col-sm-3 text-end p-0">アクセス情報：</dt>
+                    <dd v-if="target.auth_type == 'mail'" class="col-sm-9 text-break">
+                      <input
+                        type="text"
+                        class="form-control"
+                        id="auth_email"
+                        v-model="target.auth_email"
+                        placeholder="受付可能なメールアドレスを入力"
+                        required>
+                      <div class="mt-1 ms-3">
+                        <li v-for="(email, index) in extractedEmailsForTarget" :key="email">
+                          {{ email }}
+                        </li>
+                      </div>
+                    </dd>
+                    <dd v-if="target.auth_type == 'pass'" class="col-sm-9">
+                      {{ target.auth_password }}
+                    </dd>
+                  </dl>
+                </div>
+
+                <div class="modal-footer">
+                  <button class="btn btn-secondary" data-bs-dismiss="modal">
+                    閉じる
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          </div><!-- ダウンロードURL詳細ダイアログ -->
+
+          <!-- 削除確認ダイアログ -->
+          <div class="modal fade" id="dlurlConfirmModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">削除確認</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                  ダウンロードURLを削除しますか？
+                </div>
+                <div class="modal-footer">
+                  <button class="btn btn-secondary" data-bs-dismiss="modal">
+                    キャンセル
+                  </button>
+                  <button class="btn btn-danger" @click="confirmDelete">
+                    削除
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div><!-- 削除確認ダイアログ -->
+      </div><!-- downloadUrlsApp -->
+      {% endraw %}
       </div><!-- ダウンロードURLタブ  -->
 
       <!-- その他の操作タブ  -->
@@ -840,7 +908,8 @@
           urlRoot: URL_ROOT,
           downloadUrls: downloadUrlsData,
           target: null,
-          deleteModal: null,
+          detailModal: null,
+          confirmModal: null,
 
           upload_request_id: "{{ upload_request.id }}",
           expire_days: "",
@@ -851,8 +920,11 @@
         };
       },
       mounted() {
-        this.deleteModal = new bootstrap.Modal(
-          document.getElementById("confirmDownloadUrlDeleteModal")
+        this.detailModal = new bootstrap.Modal(
+          document.getElementById("dlurlDetailModal")
+        );
+        this.confirmModal = new bootstrap.Modal(
+          document.getElementById("dlurlConfirmModal")
         );
       },
       computed: {
@@ -872,7 +944,17 @@
           )
           // 重複除外
           return matches ? [...new Set(matches)] : []
-        }
+        },
+        extractedEmailsForTarget() {
+          if (!this.target?.auth_email) {
+            return []
+          }
+          const matches = this.target.auth_email.match(
+            /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+          )
+          // 重複除外
+          return matches ? [...new Set(matches)] : []
+        },
       },
       watch: {
         auth_email() {
@@ -881,6 +963,11 @@
         }
       },      
       methods: {
+        openDetailModal(downloadUrl) {
+          this.target = downloadUrl;
+          this.detailModal.show();
+        },
+      
         addDownloadUrl(downloadUrl) {
           this.downloadUrls.push(downloadUrl);
         },
@@ -911,9 +998,9 @@ ${this.urlRoot}download/${downloadUrl.download_token}
             });
         },
 
-        openDeleteModal(downloadUrls) {
-          this.target = downloadUrls;
-          this.deleteModal.show();
+        openDeleteModal(downloadUrl) {
+          this.target = downloadUrl;
+          this.confirmModal.show();
         },
 
         async confirmDelete() {
@@ -936,7 +1023,7 @@ ${this.urlRoot}download/${downloadUrl.download_token}
     
           this.downloadUrls = this.downloadUrls.filter(d => d.id !== target.id);
           this.target = null;
-          this.deleteModal.hide();
+          this.confirmModal.hide();
         },
 
         async generateUrl() {

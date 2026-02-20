@@ -15,6 +15,14 @@ def list_users():
     return cur.fetchall()
 
 # ------------------------
+# ユーザ取得
+# ------------------------
+def get_user(login_id):
+    db = get_db()
+    cur = db.execute("SELECT * FROM users WHERE login_id = ?", (login_id,))
+    return cur.fetchone()
+
+# ------------------------
 # ログインユーザ情報保存
 # ------------------------
 def save_login_user(login_id, name, mail, external='', admin_flag=None, disabled_flag=None, password=None):
@@ -104,7 +112,6 @@ def is_admin_user(login_id):
 
     admin_flag = row[0]
 
-    # パスワード検証
     return bool(admin_flag)
 
 # ------------------------
