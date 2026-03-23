@@ -57,12 +57,6 @@ def guestauth_required(view):
         if not auth:
             abort(404)
 
-        # アクセスログ
-        if hasattr(g, "access_log"):
-            g.access_log.update({
-                "user_id": auth["auth_email"],
-            })
-
         # 認証方式がある場合は認証画面へリダイレクト
         auth_type = auth["auth_type"]
         if auth_type in ("pass", "mail"):
@@ -74,6 +68,17 @@ def guestauth_required(view):
                     token=token
                 ))
         # 認証なしならそのまま通す
+
+        # ユーザーIDをセッションから取得
+        guest_auth = session.get("guest_auth", {})
+        user_info = guest_auth.get(token, {})
+        user_id = user_info.get("user_id")
+    
+        # アクセスログ
+        if hasattr(g, "access_log"):
+            g.access_log.update({
+                "user_id": user_id,
+            })
 
         # 有効期限設定（初回アクセス時）
         if auth["token_type"] == "download":
@@ -177,6 +182,12 @@ def guest_auth(token):
                         authenticated_tokens.append(token)
                     session.permanent = True
                     session["authenticated_tokens"] = authenticated_tokens
+
+                    guest_auth = session.get("guest_auth", {})
+                    guest_auth[token] = {
+                        "user_id": mail_address
+                    }
+                    session["guest_auth"] = guest_auth
 
                     # アクセスログ
                     if hasattr(g, "access_log"):

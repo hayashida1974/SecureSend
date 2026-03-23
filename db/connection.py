@@ -4,13 +4,12 @@ from werkzeug.security import generate_password_hash
 from paths import DB_PATH
 
 def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
-        cur = conn.cursor()
 
+    def migration_1(conn):
         # ------------------------
         # ユーザー情報
         # ------------------------
-        cur.execute("""
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 login_id TEXT UNIQUE,          -- ユーザーID
@@ -26,7 +25,7 @@ def init_db():
         # ------------------------
         # ユーザー存在チェック
         # ------------------------
-        cur.execute("""
+        cur = conn.execute("""
             SELECT COUNT(*)
             FROM users
         """)
@@ -55,7 +54,7 @@ def init_db():
         # ------------------------
         # アップロード依頼
         # ------------------------
-        cur.execute("""
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS upload_requests (
                 id TEXT PRIMARY KEY,          -- UUID
                 upload_token TEXT UNIQUE,     -- URL用トークン
@@ -76,7 +75,7 @@ def init_db():
         # ------------------------
         # ダウンロード依頼
         # ------------------------
-        cur.execute("""
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS download_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 upload_request_id TEXT,
@@ -99,7 +98,7 @@ def init_db():
         # ------------------------
         # ファイル実体
         # ------------------------
-        cur.execute("""
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS files (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 upload_request_id TEXT,
@@ -117,7 +116,7 @@ def init_db():
         # ------------------------
         # ファイルダウンロード回数
         # ------------------------
-        cur.execute("""
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS download_counts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 download_request_id TEXT,
@@ -133,7 +132,7 @@ def init_db():
         # ------------------------
         # ワンタイムパスワード
         # ------------------------
-        cur.execute("""
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS otps (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 token TEXT NOT NULL,
@@ -148,7 +147,7 @@ def init_db():
         # ------------------------
         # アクセスログ
         # ------------------------
-        cur.execute("""
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS access_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
 
@@ -172,8 +171,59 @@ def init_db():
                 user_agent TEXT
             )
         """)
+    
+    def migration_2(conn):
+        conn.execute("""
+            ALTER TABLE access_logs ADD COLUMN box_name TEXT;
+        """)
+        conn.execute("""
+            ALTER TABLE access_logs ADD COLUMN file_name TEXT;
+        """)
 
-        conn.commit()
+    migrations = {
+        1: migration_1,
+        2: migration_2,
+    }
+    migrate_database(migrations)
+
+def migrate_database(migrations):
+    """
+    migrations: dict[int, callable]
+        key: バージョン番号
+        value: 関数(conn) -> None
+    """
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        cursor = conn.cursor()
+
+        # 現在の user_version を取得
+        cursor.execute("PRAGMA user_version")
+        db_version = cursor.fetchone()[0]
+
+        # バージョン順に並べて処理
+        for version, migration in sorted(migrations.items()):
+            if version <= db_version:
+                continue
+
+            try:
+                # トランザクション開始
+                conn.execute("BEGIN")
+
+                # マイグレーション実行
+                migration(conn)
+
+                # user_version 更新
+                cursor.execute(f"PRAGMA user_version = {version}")
+
+                # コミット
+                conn.commit()
+
+            except Exception:
+                conn.rollback()
+                raise  # エラー時はロールバックして再スロー
+
+    finally:
+        conn.close()
 
 def get_db():
     if "db" not in g:

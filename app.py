@@ -96,6 +96,11 @@ app.template_filter("mask_email")(format_mask_email)
 # CSRF対策
 # ----------------------------
 csrf = SeaSurf(app)
+env = os.environ.get("FLASK_ENV") or "development"
+if env == "production":
+    app.config['SEASURF_CHECK_ORIGIN'] = True
+else:
+    app.config['SEASURF_CHECK_ORIGIN'] = False
 
 # ------------------------
 # アクセスログ取得用
